@@ -1,0 +1,1 @@
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=com.snack.demo.service.spring.ServiceAutoConfig
