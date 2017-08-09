@@ -6,6 +6,8 @@ import com.snack.rpc.codec.ResponseMessage;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Method;
 
@@ -13,6 +15,7 @@ import java.lang.reflect.Method;
  * Created by yangyang.zhao on 2017/8/9.
  */
 public class ServerHandler extends SimpleChannelInboundHandler<RequestMessage> {
+    private static final Logger logger = LoggerFactory.getLogger(ServerHandler.class);
     private RpcServer rpcServer;
 
     public ServerHandler(RpcServer rpcServer) {
@@ -21,7 +24,7 @@ public class ServerHandler extends SimpleChannelInboundHandler<RequestMessage> {
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, RequestMessage msg) throws Exception {
-        System.out.println(msg.toString());
+        logger.info(msg.toString());
 
         rpcServer.getThreadPoolExecutor().submit(new HandlerTask(ctx.channel(), msg, rpcServer));
     }

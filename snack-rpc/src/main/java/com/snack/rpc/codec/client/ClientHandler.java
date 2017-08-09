@@ -6,22 +6,20 @@ import com.snack.rpc.codec.ResponseMessage;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Created by yangyang.zhao on 2017/8/9.
  */
 public class ClientHandler extends SimpleChannelInboundHandler<ResponseMessage> {
-    private Object result;
+    private static final Logger logger = LoggerFactory.getLogger(ClientHandler.class);
     private volatile Channel channel;
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, ResponseMessage msg) throws Exception {
-        System.out.println(msg.toString());
+        logger.info(msg.toString());
         RpcClientChannel channel = (RpcClientChannel) ctx.channel();
         channel.set(msg);
-    }
-
-    public Object getResult() {
-        return result;
     }
 
     @Override

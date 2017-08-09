@@ -23,7 +23,7 @@ import java.util.regex.Pattern;
  * Created by yangyang.zhao on 2017/8/8.
  */
 public class ZooRegistry {
-    private final Logger logger = LoggerFactory.getLogger(ZooRegistry.class);
+    private static final Logger logger = LoggerFactory.getLogger(ZooRegistry.class);
     private CuratorFramework client = null;
     private ServiceDiscovery<InstanceDetails> serviceDiscovery = null;
     private static String basePath;
@@ -79,7 +79,6 @@ public class ZooRegistry {
                 .payload(new InstanceDetails(id, localIp, port, serviceName)).build();
 
         serviceDiscovery.unregisterService(service);
-        System.out.println("unregisterService");
         logger.info("unregisterService|serviceName=" + serviceName + "|port=" + port);
     }
 
