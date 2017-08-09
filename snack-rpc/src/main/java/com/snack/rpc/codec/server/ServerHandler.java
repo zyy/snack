@@ -23,31 +23,52 @@ public class ServerHandler extends SimpleChannelInboundHandler<RequestMessage> {
     protected void channelRead0(ChannelHandlerContext ctx, RequestMessage msg) throws Exception {
         System.out.println(msg.toString());
 
-        Object[] parameters = msg.getParameters();
-        Class[] parameterTypes = new Class[0];
-        if (parameters != null) {
-            parameterTypes = new Class[parameters.length];
-            for (int i = 0; i < parameters.length; i++) {
-                parameterTypes[i] = parameters[i].getClass();
-            }
-        }
-
-        Object obj = rpcServer.services.get(msg.getServiceName());
-        Class clazz = obj.getClass();
-        Method method = clazz.getMethod(msg.getMethodName(), parameterTypes);
-        Object result = method.invoke(obj, msg.getParameters());
-
-        ResponseMessage responseMessage = new ResponseMessage();
-        responseMessage.setSuccess(true);
-        responseMessage.setResult(result);
-        responseMessage.setMessageID(msg.getMessageID());
-
-        ctx.channel().writeAndFlush(responseMessage);
+        rpcServer.getThreadPoolExecutor().submit(new HandlerTask(ctx.channel(), msg, rpcServer));
     }
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
         cause.printStackTrace();
         ctx.close();
+    }
+
+    private static class HandlerTask implements Runnable {
+        private final Channel channel;
+        private final RequestMessage requestMessage;
+        private final RpcServer rpcServer;
+
+        public HandlerTask(Channel channel, RequestMessage requestMessage, RpcServer rpcServer) {
+            this.channel = channel;
+            this.requestMessage = requestMessage;
+            this.rpcServer = rpcServer;
+        }
+
+        @Override
+        public void run() {
+            ResponseMessage responseMessage = new ResponseMessage();
+            try {
+                Object[] parameters = requestMessage.getParameters();
+                Class[] parameterTypes = new Class[0];
+                if (parameters != null) {
+                    parameterTypes = new Class[parameters.length];
+                    for (int i = 0; i < parameters.length; i++) {
+                        parameterTypes[i] = parameters[i].getClass();
+                    }
+                }
+
+                Object object = rpcServer.services.get(requestMessage.getServiceName());
+                Class clazz = object.getClass();
+                Method method = clazz.getMethod(requestMessage.getMethodName(), parameterTypes);
+                Object result = method.invoke(object, requestMessage.getParameters());
+
+                responseMessage.setSuccess(true);
+                responseMessage.setResult(result);
+                responseMessage.setMessageID(requestMessage.getMessageID());
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
+            channel.writeAndFlush(responseMessage);
+        }
     }
 }
