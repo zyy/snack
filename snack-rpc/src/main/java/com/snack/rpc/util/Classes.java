@@ -11,7 +11,7 @@ import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
 /**
- * Created by noname on 15/11/27.
+ * Created by yangyang.zhao on 2017/8/3.
  */
 public final class Classes {
 
@@ -21,7 +21,6 @@ public final class Classes {
      * @param pkgName   包名
      * @param recursive 是否遍历子包
      * @return 类的完整名称
-     * <p>
      * 参考实现: http://blog.csdn.net/wangpeng047/article/details/8206427
      */
     public static List<String> getClassListByPackage(String pkgName, boolean recursive) {
@@ -52,7 +51,6 @@ public final class Classes {
      */
     private static List<String> getClassListByFile(String rootPath, String filePath, boolean recursive) {
         List<String> list = new ArrayList<>();
-
         File file = new File(filePath);
         File[] childFiles = file.listFiles();
         for (File childFile : childFiles) {
@@ -70,7 +68,6 @@ public final class Classes {
                 }
             }
         }
-
         return list;
     }
 
@@ -134,7 +131,6 @@ public final class Classes {
      */
     private static List<String> getClassListByJars(URL[] urls, String pkgName, boolean recursive) {
         List<String> list = new ArrayList<>();
-
         if (urls != null) {
             for (int i = 0; i < urls.length; i++) {
                 URL url = urls[i];
@@ -143,12 +139,10 @@ public final class Classes {
                 if (urlPath.endsWith("/")) {
                     continue;
                 }
-
                 String jarPath = urlPath + "!/" + pkgName;
                 list.addAll(getClassListByJar(jarPath, recursive));
             }
         }
-
         return list;
     }
 }
