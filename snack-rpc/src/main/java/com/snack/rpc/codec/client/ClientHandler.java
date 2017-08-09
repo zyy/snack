@@ -1,5 +1,6 @@
 package com.snack.rpc.codec.client;
 
+import com.snack.rpc.client.RpcClientChannel;
 import com.snack.rpc.codec.RequestMessage;
 import com.snack.rpc.codec.ResponseMessage;
 import io.netty.channel.Channel;
@@ -15,7 +16,8 @@ public class ClientHandler extends SimpleChannelInboundHandler<ResponseMessage> 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, ResponseMessage msg) throws Exception {
         System.out.println(msg.toString());
-        this.result = msg.getResult();
+        RpcClientChannel channel = (RpcClientChannel) ctx.channel();
+        channel.set(msg);
     }
 
     public Object getResult() {

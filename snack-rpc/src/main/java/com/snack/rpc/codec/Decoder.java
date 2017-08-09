@@ -56,7 +56,6 @@ public class Decoder<T> extends ByteToMessageDecoder {
             in.readBytes(body);
             Object msg = ProtoStuffSerializer.serializer.deserialize(body, clazz);
             out.add(msg);
-            System.out.println(msg);
 
             position = Position.HEADER;
         }
