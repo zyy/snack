@@ -25,4 +25,11 @@ public class ResponseMessage {
                 ", errorCode=" + errorCode +
                 '}';
     }
+
+    public static ResponseMessage failure(Exception e) {
+        ResponseMessage responseMessage = new ResponseMessage();
+        responseMessage.setSuccess(false);
+        responseMessage.errorInfo = e.getMessage();
+        return responseMessage;
+    }
 }
