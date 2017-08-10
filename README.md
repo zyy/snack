@@ -1,4 +1,5 @@
 [![Build Status](https://travis-ci.org/zyy/snack.svg?branch=master)](https://travis-ci.org/zyy/snack)
+[![Codecov](https://codecov.io/gh/alibaba/fastjson/branch/master/graph/badge.svg)](https://codecov.io/gh/alibaba/fastjson/branch/master)
 [![License](https://img.shields.io/badge/license-Apache%202-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
 
 # Snack is a RPC Framework
