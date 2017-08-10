@@ -8,3 +8,10 @@
 * 消息序列化使用ProtoStuff。
 * 服务治理基于Zookeeper。
 * 支持轮询调度、随机调度。
+
+# Snack is a RPC Framework 
+* Snack based on Java language, Snack is based on the realization of Spring-boot service RPC Framework. 
+* Network communication based on Netty4. 
+* Message serialization using Proto Stuff. 
+* Service governance based on the Zookeeper. 
+* Support polling scheduling, stochastic scheduling.
