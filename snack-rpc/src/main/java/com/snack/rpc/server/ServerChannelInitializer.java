@@ -4,7 +4,6 @@ import com.snack.rpc.RpcServer;
 import com.snack.rpc.codec.server.ServerDecoder;
 import com.snack.rpc.codec.server.ServerEncoder;
 import com.snack.rpc.codec.server.ServerHandler;
-import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.socket.SocketChannel;

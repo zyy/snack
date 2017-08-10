@@ -35,12 +35,11 @@ public class RpcApplication extends Application {
                     }
                 }
             });
-
             scanAndRegisterServices();
 
             server.start();
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("RpcApplication load failure", e);
             System.exit(1);
         }
     }

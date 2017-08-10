@@ -13,12 +13,12 @@ import io.netty.channel.pool.ChannelPoolHandler;
 public class ClientChannelPoolHandler implements ChannelPoolHandler {
     @Override
     public void channelReleased(Channel ch) throws Exception {
-
+        // Do nothing because of X and Y
     }
 
     @Override
     public void channelAcquired(Channel ch) throws Exception {
-
+        // Do nothing because of X and Y
     }
 
     @Override

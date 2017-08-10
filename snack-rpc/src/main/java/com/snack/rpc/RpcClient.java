@@ -14,12 +14,12 @@ public class RpcClient {
     private static Config conf = ConfigFactory.load();
     private static final ConcurrentHashMap<String, Object> proxies = new ConcurrentHashMap<>();
 
-    public static Config getConfig() {
-        return conf;
+    private RpcClient() {
+        // ·ÀÖ¹ÊµÀý»¯
     }
 
-    public RpcClient() {
-
+    public static Config getConfig() {
+        return conf;
     }
 
     public static <T> T get(String server, Class<T> clazz) {

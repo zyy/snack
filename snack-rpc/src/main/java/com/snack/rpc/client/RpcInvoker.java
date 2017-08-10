@@ -121,10 +121,8 @@ public class RpcInvoker implements InvocationHandler {
         InetSocketAddress select(List<InetSocketAddress> addresses);
 
         static InvokerBalancer get(String mode) {
-            if (mode != null) {
-                if (mode.equals("RR")) {
-                    return new RoundRobinBalancer();
-                }
+            if (mode != null && mode.equals("RR")) {
+                return new RoundRobinBalancer();
             }
             return new RandomBalancer();
         }

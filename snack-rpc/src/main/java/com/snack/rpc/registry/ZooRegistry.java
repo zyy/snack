@@ -26,7 +26,6 @@ public class ZooRegistry {
     private static final Logger logger = LoggerFactory.getLogger(ZooRegistry.class);
     private CuratorFramework client = null;
     private ServiceDiscovery<InstanceDetails> serviceDiscovery = null;
-    private static String basePath;
     private static ZooRegistry instance = new ZooRegistry();
     private static String innerHostIp = null;
     private static Pattern ipPattern = Pattern.compile("^([0-9]{1,3}\\.){3}[0-9]{1,3}$");
@@ -38,7 +37,7 @@ public class ZooRegistry {
 
     private ZooRegistry() {
         String connectString = RpcServer.getConfig().getString("zookeeper.connectString");
-        basePath = RpcServer.getConfig().getString("zookeeper.basePath");
+        String basePath = RpcServer.getConfig().getString("zookeeper.basePath");
 
         client = CuratorFrameworkFactory.newClient(connectString, new ExponentialBackoffRetry(1000, 3));
         client.start();
@@ -64,12 +63,12 @@ public class ZooRegistry {
                 .payload(new InstanceDetails(id, localIp, port, serviceName)).build();
 
         serviceDiscovery.registerService(service);
-        logger.info("registerService|serviceName=" + serviceName + "|port=" + port);
+        logger.info("registerService, serviceName = {}, port = {}", serviceName, port);
     }
 
     public void unregisterService(String serviceName, int port) throws Exception {
         String localIp = getInnerHostIp();
-        String id = serviceName.substring(serviceName.lastIndexOf(".") + 1) + ":" + localIp + ":" + port;
+        String id = serviceName.substring(serviceName.lastIndexOf('.') + 1) + ":" + localIp + ":" + port;
         ServiceInstance<InstanceDetails> service = ServiceInstance.<InstanceDetails>builder()
                 .name(serviceName)
                 .address(getInnerHostIp())
@@ -79,7 +78,7 @@ public class ZooRegistry {
                 .payload(new InstanceDetails(id, localIp, port, serviceName)).build();
 
         serviceDiscovery.unregisterService(service);
-        logger.info("unregisterService|serviceName=" + serviceName + "|port=" + port);
+        logger.info("unregisterService, serviceName = {}, port = {}", serviceName, port);
     }
 
     public Collection<ServiceInstance<InstanceDetails>> queryForInstances(String serviceName) throws Exception{

@@ -24,14 +24,14 @@ public class ServerHandler extends SimpleChannelInboundHandler<RequestMessage> {
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, RequestMessage msg) throws Exception {
-        logger.info(msg.toString());
+        logger.info("ServerHandler receive message : {}", msg);
 
         rpcServer.getThreadPoolExecutor().submit(new HandlerTask(ctx.channel(), msg, rpcServer));
     }
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-        cause.printStackTrace();
+        logger.error("ServerHandler error", cause);
         ctx.close();
     }
 
@@ -68,7 +68,8 @@ public class ServerHandler extends SimpleChannelInboundHandler<RequestMessage> {
                 responseMessage.setResult(result);
                 responseMessage.setMessageID(requestMessage.getMessageID());
             } catch (Exception e) {
-                e.printStackTrace();
+                logger.error("HandlerTask error", e);
+                responseMessage = ResponseMessage.failure(e);
             }
 
             channel.writeAndFlush(responseMessage);

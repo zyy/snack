@@ -11,7 +11,7 @@ import org.springframework.context.annotation.Configuration;
  */
 @Configuration
 public class ServiceAutoConfig {
-    private final String SERVER = "com.snack.demo.service";
+    private static final String SERVER = "com.snack.demo.service";
 
     @Bean
     @ConditionalOnMissingBean

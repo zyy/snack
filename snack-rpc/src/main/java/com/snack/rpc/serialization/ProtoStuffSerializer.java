@@ -13,13 +13,14 @@ import org.objenesis.ObjenesisStd;
 public class ProtoStuffSerializer implements Serializer {
     private static Objenesis objenesis = new ObjenesisStd(true);
 
-    public static ProtoStuffSerializer serializer = new ProtoStuffSerializer();
+    public static final ProtoStuffSerializer serializer = new ProtoStuffSerializer();
 
     private ProtoStuffSerializer() {
     }
 
     /**
      * 序列化
+     *
      * @param obj
      * @param <T>
      * @return
@@ -40,6 +41,7 @@ public class ProtoStuffSerializer implements Serializer {
 
     /**
      * 反序列化
+     *
      * @param data
      * @param cls
      * @param <T>

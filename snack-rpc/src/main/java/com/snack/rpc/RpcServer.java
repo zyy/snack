@@ -12,7 +12,6 @@ import io.netty.channel.socket.nio.NioServerSocketChannel;
 
 import java.util.Map;
 import java.util.TreeMap;
-import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -22,7 +21,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class RpcServer {
     private static Config conf = ConfigFactory.load();
-    public Map<String, Object> services = new TreeMap<>();
+    public static final Map<String, Object> services = new TreeMap<>();
     private final ThreadPoolExecutor threadPoolExecutor;
 
     public RpcServer() {
