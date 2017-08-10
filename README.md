@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/zyy/snack.svg?branch=master)](https://travis-ci.org/zyy/snack)
+
 # Snack is a RPC Framework
 * Snack 基于Java语言编写，是基于Spring-boot实现的微服务RPC框架。
 * 网络通信基于Netty4。
