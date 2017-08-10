@@ -7,4 +7,4 @@ script: mvn cobertura:cobertura
 script: mvn -Dmaven.test.skip=true clean package
 
 after_success:
-  - bash <(curl -s https://codecov.io/bash)
+  - bash <(curl -s https://codecov.io/bash) -t baa362e8-66be-4d5b-a5db-2c4cab2ac02b
