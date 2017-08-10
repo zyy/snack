@@ -14,4 +14,4 @@
 * Network communication based on Netty4. 
 * Message serialization using Proto Stuff. 
 * Service governance based on the Zookeeper. 
-* Support polling scheduling, stochastic scheduling.
+* Support RoundRobin scheduling, Random scheduling.
