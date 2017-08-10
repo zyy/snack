@@ -1,5 +1,8 @@
 package com.snack.rpc.util;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.File;
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -13,7 +16,12 @@ import java.util.jar.JarFile;
 /**
  * Created by yangyang.zhao on 2017/8/3.
  */
-public final class Classes {
+public final class ClassesUtils {
+    private static final Logger logger = LoggerFactory.getLogger(ClassesUtils.class);
+
+    private ClassesUtils() {
+        // 防止实例化
+    }
 
     /**
      * 获取某包下所有类
@@ -82,7 +90,7 @@ public final class Classes {
         List<String> list = new ArrayList<>();
 
         String[] jarInfo = jarPath.split("!");
-        String jarFilePath = jarInfo[0].substring(jarInfo[0].indexOf("/"));
+        String jarFilePath = jarInfo[0].substring(jarInfo[0].indexOf('/'));
         String packagePath = jarInfo[1].substring(1);
         try (JarFile jarFile = new JarFile(URLDecoder.decode(jarFilePath, "utf-8"))) {
             Enumeration<JarEntry> entrys = jarFile.entries();
@@ -94,7 +102,7 @@ public final class Classes {
                 }
             }
         } catch (Exception e) {
-            //logger.warn("", e);
+            logger.warn("", e);
         }
 
         return list;
@@ -103,11 +111,11 @@ public final class Classes {
     private static void addClass(boolean recursive, List<String> list, String packagePath, String entryName) {
         if (recursive) {
             if (entryName.startsWith(packagePath)) {
-                String name = entryName.replace("/", ".").substring(0, entryName.lastIndexOf("."));
+                String name = entryName.replace("/", ".").substring(0, entryName.lastIndexOf('.'));
                 list.add(name);
             }
         } else {
-            int index = entryName.lastIndexOf("/");
+            int index = entryName.lastIndexOf('/');
             String myPackagePath;
             if (index != -1) {
                 myPackagePath = entryName.substring(0, index);
@@ -115,7 +123,7 @@ public final class Classes {
                 myPackagePath = entryName;
             }
             if (myPackagePath.equals(packagePath)) {
-                String name = entryName.replace("/", ".").substring(0, entryName.lastIndexOf("."));
+                String name = entryName.replace("/", ".").substring(0, entryName.lastIndexOf('.'));
                 list.add(name);
             }
         }

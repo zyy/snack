@@ -1,11 +1,10 @@
 package com.snack.rpc;
 
 import com.snack.rpc.registry.ZooRegistry;
-import com.snack.rpc.util.Classes;
+import com.snack.rpc.util.ClassesUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.awt.*;
 import java.util.List;
 
 /**
@@ -21,8 +20,7 @@ public class RpcApplication extends Application {
         server = new RpcServer();
     }
 
-    @Override
-    void load(Class<?> bootClazz) {
+    public void load(Class<?> bootClazz) {
         try {
             // 向注册中心注册服务信息
             ZooRegistry.getInstance().registerService(RpcServer.getConfig().getString("server.name"), RpcServer.getConfig().getInt("server.port"));
@@ -51,7 +49,7 @@ public class RpcApplication extends Application {
         String[] packages = new String[]{bootClazz.getPackage().getName() + ".face"};
 
         for (String pkg : packages) {
-            List<String> classes = Classes.getClassListByPackage(pkg, false);
+            List<String> classes = ClassesUtils.getClassListByPackage(pkg, false);
             classes.forEach(this::tryRegisterService);
         }
     }
