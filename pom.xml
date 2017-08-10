@@ -13,6 +13,7 @@
     <module>snack-web-demo</module>
     <module>snack-contract-demo</module>
     <module>snack-service-demo</module>
+    <module>snack-admin</module>
   </modules>
   <packaging>pom</packaging>
 
