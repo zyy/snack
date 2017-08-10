@@ -2,9 +2,7 @@ language: java
 jdk:
     - oraclejdk8
 
-script: mvn cobertura:cobertura
-
-script: mvn -Dmaven.test.skip=true clean package
+script: "mvn cobertura:cobertura"
 
 after_success:
-  - bash <(curl -s https://codecov.io/bash) -t baa362e8-66be-4d5b-a5db-2c4cab2ac02b
+  - bash <(curl -s https://codecov.io/bash)
