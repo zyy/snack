@@ -3,3 +3,4 @@
 * 网络通信基于Netty4。
 * 消息序列化使用ProtoStuff。
 * 服务治理基于Zookeeper。
+* 支持轮询调度、随机调度。
