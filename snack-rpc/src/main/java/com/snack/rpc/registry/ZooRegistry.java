@@ -85,6 +85,10 @@ public class ZooRegistry {
         return serviceDiscovery.queryForInstances(serviceName);
     }
 
+    public Collection<String> queryForNames() throws Exception{
+        return serviceDiscovery.queryForNames();
+    }
+
     private static String getInnerHostIp() {
         if (innerHostIp == null) {
             try {
