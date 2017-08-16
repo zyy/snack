@@ -17,7 +17,7 @@ public class WelcomeController {
 
     @RequestMapping("/")
     public String welcome(Map<String, Object> model) {
-        model.put("services", this.applicationService.getServiceInstances());
+        model.put("instancesMap", this.applicationService.getServiceInstances());
         return "service_list";
     }
 }

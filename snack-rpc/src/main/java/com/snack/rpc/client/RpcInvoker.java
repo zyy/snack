@@ -53,7 +53,7 @@ public class RpcInvoker implements InvocationHandler {
     }
 
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-        Collection<ServiceInstance<InstanceDetails>> instances = ZooRegistry.getInstance().queryForInstances(server);
+        List<ServiceInstance<InstanceDetails>> instances = ZooRegistry.getInstance().queryForInstances(server);
         ArrayList<InetSocketAddress> serverList = new ArrayList<>();
         for (ServiceInstance<InstanceDetails> instance : instances) {
             serverList.add(new InetSocketAddress(instance.getAddress(), instance.getPort()));
@@ -66,7 +66,7 @@ public class RpcInvoker implements InvocationHandler {
             logger.info("invoke node error, node info:" + first);
         }
 
-        // Ê§°Üµ÷ÓÃÆäËû½Úµã
+        // Ê§ï¿½Üµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Úµï¿½
         for (InetSocketAddress socketAddress : serverList) {
             if (socketAddress == first) {
                 continue;

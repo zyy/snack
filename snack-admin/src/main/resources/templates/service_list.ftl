@@ -59,22 +59,22 @@
 							<#--<th>服务版本</th>
 							<th>服务分组</th>
 							<th>所属应用</th>
-							<th>服务状态</th>
+							<th>服务状态</th>-->
 							<th>提供者数量</th>
-							<th>消费者数量</th>-->
+							<#--<th>消费者数量</th>-->
 						</tr>
 					</thead>
 					<tbody>
 						<#--<#if (total>0)>-->
-						<#list services as service>
+						<#list instancesMap?keys as key>
 						<tr>
-							<td><a href="/service/detail?serviceId=${service}">${service}</a></td>
+							<td><a href="/service/detail?serviceId=${key}">${key}</a></td>
 							<#--<td>${service.version}</td>
 							<td>${service.group}</td>
 							<td><a href="/app/info?appId=${service.app.id}">${service.app.name}</a></td>
-							<td><#if (service.status>0)><span class="label label-success">ok</span><#else><span class="label label-warning">down</span></#if></td>
-							<td>${service.providerCount}</td>
-							<td>${service.consumerCount}</td>-->
+							<td><#if (service.status>0)><span class="label label-success">ok</span><#else><span class="label label-warning">down</span></#if></td>-->
+							<td>${instancesMap[key]?size}</td>
+							<#--<td>${service.consumerCount}</td>-->
 						</tr>
 						</#list>
 						<#--</#if>-->

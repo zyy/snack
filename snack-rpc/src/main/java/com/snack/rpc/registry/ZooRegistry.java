@@ -11,12 +11,12 @@ import org.apache.curator.x.discovery.ServiceType;
 import org.apache.curator.x.discovery.details.JsonInstanceSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.util.StringUtils;
 
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
-import java.util.Collection;
-import java.util.Enumeration;
+import java.util.*;
 import java.util.regex.Pattern;
 
 /**
@@ -81,12 +81,15 @@ public class ZooRegistry {
         logger.info("unregisterService, serviceName = {}, port = {}", serviceName, port);
     }
 
-    public Collection<ServiceInstance<InstanceDetails>> queryForInstances(String serviceName) throws Exception{
-        return serviceDiscovery.queryForInstances(serviceName);
+    public List queryForInstances(String serviceName) throws Exception{
+        if (StringUtils.isEmpty(serviceName)) {
+            return Collections.emptyList();
+        }
+        return Arrays.asList(serviceDiscovery.queryForInstances(serviceName).toArray());
     }
 
-    public Collection<String> queryForNames() throws Exception{
-        return serviceDiscovery.queryForNames();
+    public List queryForNames() throws Exception{
+        return Arrays.asList(serviceDiscovery.queryForNames().toArray());
     }
 
     private static String getInnerHostIp() {
