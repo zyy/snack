@@ -15,7 +15,7 @@
 		    <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
 		      <ul class="nav navbar-nav">
 		        <li <#if page=='service'>class="active"</#if>>
-		        	<a href="/service/list">服务<span class="sr-only">(current)</span></a>
+		        	<a href="/">服务<span class="sr-only">(current)</span></a>
 		        </li>
 		        <#--<li <#if page=='app'>class="active"</#if>>
 		        	<a href="/app/list">应用</a>

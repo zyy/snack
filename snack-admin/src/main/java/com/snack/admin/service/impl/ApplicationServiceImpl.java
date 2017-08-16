@@ -19,7 +19,7 @@ import java.util.Map;
 public class ApplicationServiceImpl implements ApplicationService {
     private static final Logger logger = LoggerFactory.getLogger(ApplicationServiceImpl.class);
 
-    public Map<String, List> getServiceInstances() {
+    public Map<String, List> getServiceList() {
         Map<String, List> instancesMap = new HashMap<>();
         try {
             List<String> serviceNames = ZooRegistry.getInstance().queryForNames();
@@ -33,8 +33,13 @@ public class ApplicationServiceImpl implements ApplicationService {
             }
             return instancesMap;
         } catch (Exception e) {
-            logger.error("getServiceInstances error", e);
+            logger.error("getServiceList error", e);
         }
         return Collections.emptyMap();
+    }
+
+    @Override
+    public List getServiceInstances(String serviceName) {
+        return ZooRegistry.getInstance().queryForInstances(serviceName);
     }
 }

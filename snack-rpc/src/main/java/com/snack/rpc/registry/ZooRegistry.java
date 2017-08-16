@@ -16,7 +16,10 @@ import org.springframework.util.StringUtils;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Enumeration;
+import java.util.List;
 import java.util.regex.Pattern;
 
 /**
@@ -31,7 +34,7 @@ public class ZooRegistry {
     private static Pattern ipPattern = Pattern.compile("^([0-9]{1,3}\\.){3}[0-9]{1,3}$");
     private static Pattern privateIpPattern = Pattern.compile("(^127\\.0\\.0\\.1)|(^10(\\.[0-9]{1,3}){3}$)|(^172\\.1[6-9](\\.[0-9]{1,3}){2}$)|(^172\\.2[0-9](\\.[0-9]{1,3}){2}$)|(^172\\.3[0-1](\\.[0-9]{1,3}){2}$)|(^192\\.168(\\.[0-9]{1,3}){2}$)");
 
-    public static ZooRegistry getInstance(){
+    public static ZooRegistry getInstance() {
         return instance;
     }
 
@@ -81,15 +84,25 @@ public class ZooRegistry {
         logger.info("unregisterService, serviceName = {}, port = {}", serviceName, port);
     }
 
-    public List queryForInstances(String serviceName) throws Exception{
+    public List queryForInstances(String serviceName) {
         if (StringUtils.isEmpty(serviceName)) {
             return Collections.emptyList();
         }
-        return Arrays.asList(serviceDiscovery.queryForInstances(serviceName).toArray());
+        try {
+            return Arrays.asList(serviceDiscovery.queryForInstances(serviceName).toArray());
+        } catch (Exception e) {
+            logger.error("queryForInstances error", e);
+            return Collections.emptyList();
+        }
     }
 
-    public List queryForNames() throws Exception{
-        return Arrays.asList(serviceDiscovery.queryForNames().toArray());
+    public List queryForNames() {
+        try {
+            return Arrays.asList(serviceDiscovery.queryForNames().toArray());
+        } catch (Exception e) {
+            logger.error("queryForNames error", e);
+            return Collections.emptyList();
+        }
     }
 
     private static String getInnerHostIp() {
