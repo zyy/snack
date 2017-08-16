@@ -8,7 +8,7 @@
 		        <span class="icon-bar"></span>
 		        <span class="icon-bar"></span>
 		      </button>
-		      <a class="navbar-brand" href="/service/list">WebUI</a>
+		      <a class="navbar-brand" href="/service/list">snack-admin</a>
 		    </div>
 
 		    <!-- Collect the nav links, forms, and other content for toggling -->
@@ -17,7 +17,7 @@
 		        <li <#if page=='service'>class="active"</#if>>
 		        	<a href="/service/list">服务<span class="sr-only">(current)</span></a>
 		        </li>
-		        <li <#if page=='app'>class="active"</#if>>
+		        <#--<li <#if page=='app'>class="active"</#if>>
 		        	<a href="/app/list">应用</a>
 		        </li>
                	<li <#if page=='host'>class="active"</#if>>
@@ -28,7 +28,7 @@
 		        </li>
 		       	<li <#if page=='limit'>class="active"</#if>>
 		        	<a href="/limit/list">限流</a>
-		        </li>
+		        </li>-->
 		      </ul>
 		      <ul class="nav navbar-nav navbar-right">
 		      	<li>

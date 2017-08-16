@@ -11,7 +11,7 @@ import java.util.Map;
  * Created by yangyang.zhao on 2017/8/10.
  */
 @Controller
-public class WelcomeController {
+public class ServiceController {
     @Autowired
     private ApplicationService applicationService;
 

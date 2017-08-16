@@ -20,36 +20,36 @@
 		<div class="panel panel-primary">
 		  	<div class="panel-body">
                 <form id="searchParams" action="/service/list" method="get">
-				<div class="kop-list-select">
+				<#--<div class="kop-list-select">
 					<div class="kop-list-select-left">
                         <div class="form-inline">
 							<div class="btn-group">
 								<button type="button" class="btn btn-primary">应用</button>
-								<#--<button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown" aria-expanded="false">
+								&lt;#&ndash;<button type="button" class="btn btn-primary dropdown-toggle" data-toggle="dropdown" aria-expanded="false">
 									${app.name}<span class="caret"></span>
-								</button>-->
+								</button>&ndash;&gt;
 								<ul class="dropdown-menu" role="menu">
 									<li><a href="/service/list?appId=0">全部</a></li>
-									<#--<#list apps as ap>
+									&lt;#&ndash;<#list apps as ap>
 										<#if ap.id!=app.id>
 										<li><a href="/service/list?appId=${ap.id}">${ap.name}</a></li>
 										</#if>
-									</#list>-->
+									</#list>&ndash;&gt;
 								</ul>
 							</div>
 							<div class="input-group">
-								<#--<input id="keyword" name="keyword" type="text" class="form-control searchIpt" aria-describedby="basic-addon1"
-									   placeholder="service keyword" value="${keyword}">-->
+								&lt;#&ndash;<input id="keyword" name="keyword" type="text" class="form-control searchIpt" aria-describedby="basic-addon1"
+									   placeholder="service keyword" value="${keyword}">&ndash;&gt;
 							</div>
 							<div class="btn-group">
 								<button type="submit"  class="btn btn-primary" >查询</button>
 							</div>
-                            <#--<input type="hidden"  name="appId" value="${app.id}"/>-->
+                            &lt;#&ndash;<input type="hidden"  name="appId" value="${app.id}"/>&ndash;&gt;
 						</div>
 					</div>
 					<div class="kop-list-select-right">
 					</div>
-				</div>
+				</div>-->
                 </form>
 				<br/>
 				<table class="table table-hover">
