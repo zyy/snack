@@ -15,7 +15,7 @@ public class RpcClient {
     private static final ConcurrentHashMap<String, Object> proxies = new ConcurrentHashMap<>();
 
     private RpcClient() {
-        // ·ÀÖ¹ÊµÀý»¯
+        // é˜²æ­¢å®žä¾‹åŒ–
     }
 
     public static Config getConfig() {

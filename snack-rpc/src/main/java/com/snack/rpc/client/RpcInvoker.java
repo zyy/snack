@@ -66,7 +66,6 @@ public class RpcInvoker implements InvocationHandler {
             logger.info("invoke node error, node info:" + first);
         }
 
-        // ʧ�ܵ��������ڵ�
         for (InetSocketAddress socketAddress : serverList) {
             if (socketAddress == first) {
                 continue;
