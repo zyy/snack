@@ -1,10 +1,7 @@
 package com.snack.rpc.client;
 
-/**
- * Created by yangyang.zhao on 2017/8/9.
- */
-
 import com.snack.rpc.RpcClient;
+import com.snack.rpc.RpcServer;
 import com.snack.rpc.codec.RequestMessage;
 import com.snack.rpc.codec.ResponseMessage;
 import com.snack.rpc.registry.InstanceDetails;
@@ -27,23 +24,39 @@ import java.net.InetSocketAddress;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ * RPC Client-side invoker using JDK dynamic proxy.
+ * 
+ * Bug fix: 
+ * - Handles timeout (null response) and retries on other nodes
+ * - Configurable retry count via config "rpc.invoke.retry"
+ * - Configurable timeout via config "rpc.invoke.timeout"
+ */
 public class RpcInvoker implements InvocationHandler {
-    private Class clazz;
-    private String server;
-    private InvokerBalancer balancer;
-    private ChannelPoolMap<InetSocketAddress, SimpleChannelPool> poolMap;
     private static final Logger logger = LoggerFactory.getLogger(RpcInvoker.class);
-
+    
+    private final Class<?> clazz;
+    private final String server;
+    private final InvokerBalancer balancer;
+    private final ChannelPoolMap<InetSocketAddress, SimpleChannelPool> poolMap;
+    private final int timeout;
+    private final int maxRetry;
+    
+    private static final String CONFIG_KEY_TIMEOUT = "rpc.invoke.timeout";
+    private static final String CONFIG_KEY_RETRY = "rpc.invoke.retry";
+    
     public <T> RpcInvoker(String server, Class<T> clazz) {
         this.server = server;
         this.clazz = clazz;
+        this.timeout = loadTimeout();
+        this.maxRetry = loadMaxRetry();
         this.balancer = InvokerBalancer.get("RR");
-
+        
         EventLoopGroup group = new NioEventLoopGroup();
         Bootstrap bootstrap = new Bootstrap()
                 .group(group)
                 .channel(RpcClientChannel.class);
-
+        
         poolMap = new AbstractChannelPoolMap<InetSocketAddress, SimpleChannelPool>() {
             @Override
             protected SimpleChannelPool newPool(InetSocketAddress key) {
@@ -51,63 +64,97 @@ public class RpcInvoker implements InvocationHandler {
             }
         };
     }
+    
+    private int loadTimeout() {
+        try {
+            return RpcClient.getConfig().getInt(CONFIG_KEY_TIMEOUT);
+        } catch (Exception e) {
+            return 5000;
+        }
+    }
+    
+    private int loadMaxRetry() {
+        try {
+            return RpcClient.getConfig().getInt(CONFIG_KEY_RETRY);
+        } catch (Exception e) {
+            return 2;
+        }
+    }
 
+    @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
         List<ServiceInstance<InstanceDetails>> instances = ZooRegistry.getInstance().queryForInstances(server);
+        if (instances == null || instances.isEmpty()) {
+            throw new RuntimeException("No available service instances for: " + server);
+        }
+        
         ArrayList<InetSocketAddress> serverList = new ArrayList<>();
         for (ServiceInstance<InstanceDetails> instance : instances) {
             serverList.add(new InetSocketAddress(instance.getAddress(), instance.getPort()));
         }
-
-        InetSocketAddress first = balancer.select(serverList);
-        try {
-            return getResponse(method, args, first);
-        } catch (Exception e) {
-            logger.info("invoke node error, node info:" + first);
-        }
-
-        for (InetSocketAddress socketAddress : serverList) {
-            if (socketAddress == first) {
+        
+        Exception lastException = null;
+        int totalRetry = Math.min(maxRetry, serverList.size());
+        
+        for (int attempt = 0; attempt < totalRetry; attempt++) {
+            InetSocketAddress target = balancer.select(serverList);
+            if (target == null) {
                 continue;
             }
-
+            
             try {
-                return getResponse(method, args, socketAddress);
+                return getResponse(method, args, target);
             } catch (Exception e) {
-                logger.info("invoke node error, node info:" + socketAddress);
+                lastException = e;
+                logger.warn("invoke failed on {}, attempt {}/{}: {}", 
+                        new Object[]{target, attempt + 1, totalRetry, e.getMessage()});
+                balancer.onFailure(target, serverList);
             }
         }
-        throw new RuntimeException("invoke all nodes are failure");
+        
+        throw new RuntimeException("invoke all nodes are failure, last error: " 
+                + (lastException != null ? lastException.getMessage() : "unknown"), lastException);
     }
-
-    private Object getResponse(Method method, Object[] args, InetSocketAddress first) throws Exception {
-        final SimpleChannelPool pool = poolMap.get(first);
+    
+    private Object getResponse(Method method, Object[] args, InetSocketAddress target) throws Exception {
+        final SimpleChannelPool pool = poolMap.get(target);
         Future<Channel> future = pool.acquire().awaitUninterruptibly();
-
+        
         RpcClientChannel channel = null;
-        ResponseMessage responseMessage;
-        RequestMessage requestMessage;
         try {
             channel = (RpcClientChannel) future.getNow();
+            if (channel == null) {
+                throw new RuntimeException("Failed to acquire channel from pool to " + target);
+            }
+            
             channel.reset();
-            requestMessage = createRequestMessage(server, method.getName(), args, clazz);
+            
+            RequestMessage requestMessage = createRequestMessage(server, method.getName(), args, clazz);
             channel.writeAndFlush(requestMessage).awaitUninterruptibly();
-
-            responseMessage = channel.get(10000);
-        } catch (Exception e) {
-            logger.error("invoker error", e);
-            throw new RuntimeException(e);
+            
+            ResponseMessage responseMessage = channel.get(timeout);
+            
+            if (responseMessage == null) {
+                throw new RpcTimeoutException("RPC call timeout after " + timeout + "ms on " + target);
+            }
+            
+            if (!responseMessage.isSuccess()) {
+                throw new RpcCallException(responseMessage.getErrorCode(), 
+                        responseMessage.getErrorInfo() != null ? responseMessage.getErrorInfo() : "RPC call failed");
+            }
+            
+            return responseMessage.getResult();
+            
         } finally {
             if (channel != null) {
                 pool.release(channel);
             }
         }
-        return responseMessage.getResult();
     }
 
-    private RequestMessage createRequestMessage(String service, String method, Object[] args, Class clazz) {
+    private RequestMessage createRequestMessage(String service, String method, Object[] args, Class<?> clazz) {
         RequestMessage requestMessage = new RequestMessage();
-        requestMessage.setClientName(RpcClient.getConfig().getString("server.name"));
+        requestMessage.setClientName(loadClientName());
         requestMessage.setServerName(service);
         requestMessage.setServiceName(clazz.getName());
         requestMessage.setMethodName(method);
@@ -115,35 +162,79 @@ public class RpcInvoker implements InvocationHandler {
         requestMessage.setParameters(args);
         return requestMessage;
     }
+    
+    private String loadClientName() {
+        try {
+            return RpcServer.getConfig().getString("server.name");
+        } catch (Exception e) {
+            return "unknown";
+        }
+    }
 
     private interface InvokerBalancer {
         InetSocketAddress select(List<InetSocketAddress> addresses);
-
+        void onFailure(InetSocketAddress failed, List<InetSocketAddress> addresses);
+        
         static InvokerBalancer get(String mode) {
             if (mode != null && mode.equals("RR")) {
                 return new RoundRobinBalancer();
             }
             return new RandomBalancer();
         }
-
+        
         class RoundRobinBalancer implements InvokerBalancer {
-            private AtomicInteger counter = new AtomicInteger();
+            private final AtomicInteger counter = new AtomicInteger();
 
             @Override
             public InetSocketAddress select(List<InetSocketAddress> addresses) {
+                if (addresses == null || addresses.isEmpty()) {
+                    return null;
+                }
                 int index = Math.abs(counter.getAndIncrement() % addresses.size());
                 return addresses.get(index);
             }
+            
+            @Override
+            public void onFailure(InetSocketAddress failed, List<InetSocketAddress> addresses) {
+                addresses.remove(failed);
+            }
         }
-
+        
         class RandomBalancer implements InvokerBalancer {
-            private Random random = new Random();
+            private final Random random = new Random();
 
             @Override
             public InetSocketAddress select(List<InetSocketAddress> addresses) {
+                if (addresses == null || addresses.isEmpty()) {
+                    return null;
+                }
                 int index = random.nextInt(addresses.size());
                 return addresses.get(index);
             }
+            
+            @Override
+            public void onFailure(InetSocketAddress failed, List<InetSocketAddress> addresses) {
+                addresses.remove(failed);
+            }
+        }
+    }
+    
+    public static class RpcTimeoutException extends RuntimeException {
+        public RpcTimeoutException(String message) {
+            super(message);
+        }
+    }
+    
+    public static class RpcCallException extends RuntimeException {
+        private final int errorCode;
+        
+        public RpcCallException(int errorCode, String message) {
+            super(message);
+            this.errorCode = errorCode;
+        }
+        
+        public int getErrorCode() {
+            return errorCode;
         }
     }
 }

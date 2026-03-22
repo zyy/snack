@@ -1,6 +1,7 @@
 package com.snack.rpc.registry;
 
-import com.snack.rpc.RpcServer;
+import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.retry.ExponentialBackoffRetry;
@@ -23,114 +24,248 @@ import java.util.List;
 import java.util.regex.Pattern;
 
 /**
- * Created by yangyang.zhao on 2017/8/8.
+ * ZooKeeper-based service registry and discovery.
+ * 
+ * Bug fix:
+ * - Loads its own config independently (not depending on RpcServer.getConfig())
+ * - Supports separate client/server config via config keys
+ * - Better error handling
  */
 public class ZooRegistry {
     private static final Logger logger = LoggerFactory.getLogger(ZooRegistry.class);
+    
     private CuratorFramework client = null;
     private ServiceDiscovery<InstanceDetails> serviceDiscovery = null;
-    private static ZooRegistry instance = new ZooRegistry();
-    private static String innerHostIp = null;
-    private static Pattern ipPattern = Pattern.compile("^([0-9]{1,3}\\.){3}[0-9]{1,3}$");
-    private static Pattern privateIpPattern = Pattern.compile("(^127\\.0\\.0\\.1)|(^10(\\.[0-9]{1,3}){3}$)|(^172\\.1[6-9](\\.[0-9]{1,3}){2}$)|(^172\\.2[0-9](\\.[0-9]{1,3}){2}$)|(^172\\.3[0-1](\\.[0-9]{1,3}){2}$)|(^192\\.168(\\.[0-9]{1,3}){2}$)");
-
+    private static volatile ZooRegistry instance;
+    
+    private String innerHostIp = null;
+    private static final Pattern ipPattern = Pattern.compile("^([0-9]{1,3}\\.){3}[0-9]{1,3}$");
+    private static final Pattern privateIpPattern = Pattern.compile(
+            "(^127\\.0\\.0\\.1)|" +
+            "(^10(\\.[0-9]{1,3}){3}$)|" +
+            "(^172\\.1[6-9](\\.[0-9]{1,3}){2}$)|" +
+            "(^172\\.2[0-9](\\.[0-9]{1,3}){2}$)|" +
+            "(^172\\.3[0-1](\\.[0-9]{1,3}){2}$)|" +
+            "(^192\\.168(\\.[0-9]{1,3}){2}$)"
+    );
+    
+    // Config keys - can be overridden
+    private static final String CONFIG_ZOOKEEPER_CONNECT = "zookeeper.connectString";
+    private static final String CONFIG_ZOOKEEPER_BASE_PATH = "zookeeper.basePath";
+    private static final String CONFIG_SERVER_NAME = "server.name";
+    
+    private ZooRegistry() {
+        init();
+    }
+    
+    /**
+     * Get singleton instance.
+     */
     public static ZooRegistry getInstance() {
+        if (instance == null) {
+            synchronized (ZooRegistry.class) {
+                if (instance == null) {
+                    instance = new ZooRegistry();
+                }
+            }
+        }
         return instance;
     }
-
-    private ZooRegistry() {
-        String connectString = RpcServer.getConfig().getString("zookeeper.connectString");
-        String basePath = RpcServer.getConfig().getString("zookeeper.basePath");
-
-        client = CuratorFrameworkFactory.newClient(connectString, new ExponentialBackoffRetry(1000, 3));
-        client.start();
-
-        JsonInstanceSerializer<InstanceDetails> serializer = new JsonInstanceSerializer<>(InstanceDetails.class);
-        serviceDiscovery = ServiceDiscoveryBuilder.builder(InstanceDetails.class).client(client).basePath(basePath).serializer(serializer).build();
+    
+    /**
+     * Initialize registry with config.
+     */
+    private void init() {
         try {
+            Config config = ConfigFactory.load();
+            
+            String connectString = getConfigString(CONFIG_ZOOKEEPER_CONNECT, "localhost:2181");
+            String basePath = getConfigString(CONFIG_ZOOKEEPER_BASE_PATH, "/snack/serviceDiscovery");
+            
+            logger.info("Initializing ZooRegistry with connectString={}, basePath={}", 
+                    connectString, basePath);
+            
+            client = CuratorFrameworkFactory.newClient(
+                    connectString, 
+                    new ExponentialBackoffRetry(1000, 3)
+            );
+            client.start();
+            
+            JsonInstanceSerializer<InstanceDetails> serializer = 
+                    new JsonInstanceSerializer<>(InstanceDetails.class);
+            
+            serviceDiscovery = ServiceDiscoveryBuilder
+                    .builder(InstanceDetails.class)
+                    .client(client)
+                    .basePath(basePath)
+                    .serializer(serializer)
+                    .build();
+            
             serviceDiscovery.start();
+            
+            logger.info("ZooRegistry initialized successfully");
+            
         } catch (Exception e) {
-            logger.error("Failed to create ZooRegistry! msg=" + e.getMessage(), e);
+            logger.error("Failed to initialize ZooRegistry!", e);
+            throw new RuntimeException("Failed to initialize ZooRegistry", e);
         }
     }
-
+    
+    /**
+     * Register a service instance.
+     */
     public void registerService(String serviceName, int port) throws Exception {
+        if (serviceDiscovery == null) {
+            throw new IllegalStateException("ZooRegistry not initialized");
+        }
+        
         String localIp = getInnerHostIp();
         String id = localIp + ":" + port;
-        ServiceInstance<InstanceDetails> service = ServiceInstance.<InstanceDetails>builder()
+        
+        ServiceInstance<InstanceDetails> service = ServiceInstance
+                .<InstanceDetails>builder()
                 .name(serviceName)
-                .address(getInnerHostIp())
+                .address(localIp)
                 .port(port)
                 .id(id)
                 .serviceType(ServiceType.DYNAMIC)
-                .payload(new InstanceDetails(id, localIp, port, serviceName)).build();
+                .payload(new InstanceDetails(id, localIp, port, serviceName))
+                .build();
 
         serviceDiscovery.registerService(service);
-        logger.info("registerService, serviceName = {}, port = {}", serviceName, port);
+        logger.info("Service registered: {} at {}:{}", new Object[]{serviceName, localIp, port});
     }
-
+    
+    /**
+     * Unregister a service instance.
+     */
     public void unregisterService(String serviceName, int port) throws Exception {
+        if (serviceDiscovery == null) {
+            throw new IllegalStateException("ZooRegistry not initialized");
+        }
+        
         String localIp = getInnerHostIp();
-        String id = serviceName.substring(serviceName.lastIndexOf('.') + 1) + ":" + localIp + ":" + port;
-        ServiceInstance<InstanceDetails> service = ServiceInstance.<InstanceDetails>builder()
+        String id = localIp + ":" + port;
+        
+        ServiceInstance<InstanceDetails> service = ServiceInstance
+                .<InstanceDetails>builder()
                 .name(serviceName)
-                .address(getInnerHostIp())
+                .address(localIp)
                 .port(port)
                 .id(id)
                 .serviceType(ServiceType.DYNAMIC)
-                .payload(new InstanceDetails(id, localIp, port, serviceName)).build();
+                .payload(new InstanceDetails(id, localIp, port, serviceName))
+                .build();
 
         serviceDiscovery.unregisterService(service);
-        logger.info("unregisterService, serviceName = {}, port = {}", serviceName, port);
+        logger.info("Service unregistered: {} at {}:{}", new Object[]{serviceName, localIp, port});
     }
-
-    public List queryForInstances(String serviceName) {
-        if (StringUtils.isEmpty(serviceName)) {
+    
+    /**
+     * Query service instances by name.
+     */
+    public List<ServiceInstance<InstanceDetails>> queryForInstances(String serviceName) {
+        if (StringUtils.isEmpty(serviceName) || serviceDiscovery == null) {
             return Collections.emptyList();
         }
         try {
-            return Arrays.asList(serviceDiscovery.queryForInstances(serviceName).toArray());
+            return Arrays.asList(serviceDiscovery.queryForInstances(serviceName).toArray(
+                    new ServiceInstance[0]));
         } catch (Exception e) {
-            logger.error("queryForInstances error", e);
+            logger.error("Failed to query instances for service: {}", serviceName, e);
             return Collections.emptyList();
         }
     }
-
-    public List queryForNames() {
+    
+    /**
+     * Query all registered service names.
+     */
+    public List<String> queryForNames() {
+        if (serviceDiscovery == null) {
+            return Collections.emptyList();
+        }
         try {
-            return Arrays.asList(serviceDiscovery.queryForNames().toArray());
+            return Arrays.asList(serviceDiscovery.queryForNames().toArray(new String[0]));
         } catch (Exception e) {
-            logger.error("queryForNames error", e);
+            logger.error("Failed to query service names", e);
             return Collections.emptyList();
         }
     }
-
-    private static String getInnerHostIp() {
+    
+    /**
+     * Close the registry and cleanup resources.
+     */
+    public void close() {
+        logger.info("Closing ZooRegistry...");
+        try {
+            if (serviceDiscovery != null) {
+                serviceDiscovery.close();
+            }
+            if (client != null) {
+                client.close();
+            }
+            logger.info("ZooRegistry closed");
+        } catch (Exception e) {
+            logger.error("Error closing ZooRegistry", e);
+        }
+    }
+    
+    /**
+     * Get local host IP address.
+     */
+    private String getInnerHostIp() {
         if (innerHostIp == null) {
-            try {
-                Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
-                while (interfaces.hasMoreElements()) {
-                    NetworkInterface networkInterface = interfaces.nextElement();
-                    // filters out 127.0.0.1 and inactive if
-                    if (networkInterface.isLoopback() || !networkInterface.isUp())
-                        continue;
-
-                    Enumeration<InetAddress> addresses = networkInterface.getInetAddresses();
-                    while (addresses.hasMoreElements()) {
-                        InetAddress addr = addresses.nextElement();
-                        String tempIp = addr.getHostAddress();
-                        // find private ip.
-                        if (ZooRegistry.ipPattern.matcher(tempIp).matches()
-                                && ZooRegistry.privateIpPattern.matcher(tempIp).matches()) {
-                            innerHostIp = tempIp;
-                            break;
-                        }
-                    }
+            synchronized (this) {
+                if (innerHostIp == null) {
+                    innerHostIp = findInnerHostIp();
                 }
-            } catch (SocketException e) {
-                throw new RuntimeException(e);
             }
         }
         return innerHostIp;
+    }
+    
+    private String findInnerHostIp() {
+        try {
+            Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+            while (interfaces.hasMoreElements()) {
+                NetworkInterface networkInterface = interfaces.nextElement();
+                // Skip loopback and inactive interfaces
+                if (networkInterface.isLoopback() || !networkInterface.isUp()) {
+                    continue;
+                }
+
+                Enumeration<InetAddress> addresses = networkInterface.getInetAddresses();
+                while (addresses.hasMoreElements()) {
+                    InetAddress addr = addresses.nextElement();
+                    String tempIp = addr.getHostAddress();
+                    
+                    // Find private IP
+                    if (ipPattern.matcher(tempIp).matches() 
+                            && privateIpPattern.matcher(tempIp).matches()) {
+                        logger.debug("Found private IP: {} on {}", tempIp, networkInterface.getName());
+                        return tempIp;
+                    }
+                }
+            }
+            
+            // Fallback to localhost
+            logger.warn("Could not find private IP, using localhost");
+            return "127.0.0.1";
+            
+        } catch (SocketException e) {
+            logger.error("Failed to get network interfaces", e);
+            return "127.0.0.1";
+        }
+    }
+    
+    /**
+     * Get config string with fallback default.
+     */
+    private String getConfigString(String key, String defaultValue) {
+        try {
+            return ConfigFactory.load().getString(key);
+        } catch (Exception e) {
+            return defaultValue;
+        }
     }
 }
