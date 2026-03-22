@@ -163,7 +163,7 @@ public class ExtensionLoader<T> {
             
             loaded = true;
             logger.info("Loaded {} extensions for {}: {}", 
-                    new Object[]{cachedClasses.size(), type.getName(), cachedClasses.keySet().toString()});
+                    cachedClasses.size(), type.getName(), cachedClasses.keySet());
         } catch (Exception e) {
             logger.error("Failed to load extension classes for " + type.getName(), e);
         }
