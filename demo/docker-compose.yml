@@ -8,8 +8,10 @@ services:
     environment:
       ZOO_MY_ID: 1
       ZOO_SERVERS: server.1=zookeeper:2888:3888;2181
+      ZOO_4LW_COMMANDS_WHITELIST: "srvr,ruok,stat,mntr,envi,conf,cons,dump,wchs,dirs"
     healthcheck:
-      test: ["CMD", "zkServer.sh", "status"]
+      test: ["CMD", "bash", "-c", "echo srvr | nc localhost 2181 2>/dev/null | grep -q 'Zookeeper version' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s

@@ -57,7 +57,7 @@ trap cleanup EXIT INT TERM
 
 # Function to check if ZooKeeper is ready
 check_zookeeper_ready() {
-    local max_attempts=10
+    local max_attempts=15  # Increased from 10 to 15 (75 seconds total)
     local attempt=1
     
     echo "Waiting for ZooKeeper to be ready..."
@@ -66,26 +66,33 @@ check_zookeeper_ready() {
         # Try different methods to check ZooKeeper
         local zk_ready=false
         
-        # Method 1: Use nc (netcat) if available
+        # Method 1: Use nc (netcat) if available - use srvr command instead of ruok
         if command -v nc >/dev/null 2>&1; then
-            if echo ruok | nc localhost 2181 2>/dev/null | grep -q imok; then
+            if echo srvr | nc localhost 2181 2>/dev/null | grep -q 'Zookeeper version'; then
                 zk_ready=true
             fi
         # Method 2: Use docker exec to check inside container
         elif docker-compose -f "$SCRIPT_DIR/docker-compose.yml" ps -q zookeeper >/dev/null 2>&1; then
             local container_id=$(docker-compose -f "$SCRIPT_DIR/docker-compose.yml" ps -q zookeeper)
             if [ -n "$container_id" ]; then
-                if docker exec "$container_id" bash -c "echo ruok | nc localhost 2181 2>/dev/null | grep -q imok" 2>/dev/null; then
+                if docker exec "$container_id" bash -c "echo srvr | nc localhost 2181 2>/dev/null | grep -q 'Zookeeper version'" 2>/dev/null; then
                     zk_ready=true
                 fi
             fi
-        # Method 3: Check if port is open (basic connectivity)
+        # Method 3: Check Docker health status
+        elif docker-compose -f "$SCRIPT_DIR/docker-compose.yml" ps --services --filter "status=healthy" | grep -q zookeeper; then
+            # Docker reports the container as healthy
+            echo "⚠️  Docker reports ZooKeeper as healthy but cannot verify directly. Assuming ready."
+            zk_ready=true
+        # Method 4: Check if port is open (basic connectivity)
         else
             # Simple port check using bash built-in (may not work on all systems)
             if (echo >/dev/tcp/localhost/2181) &>/dev/null; then
-                # Port is open, assume ZooKeeper is ready
-                echo "⚠️  Port 2181 is open but cannot verify ZooKeeper health. Assuming ready."
-                zk_ready=true
+                # Port is open, assume ZooKeeper is ready after some attempts
+                if [ $attempt -ge 5 ]; then  # Only assume ready after 5 attempts
+                    echo "⚠️  Port 2181 is open but cannot verify ZooKeeper health. Assuming ready after $attempt attempts."
+                    zk_ready=true
+                fi
             fi
         fi
         
@@ -100,6 +107,7 @@ check_zookeeper_ready() {
     done
     
     echo "❌ ZooKeeper failed to start within $max_attempts attempts"
+    echo "Checking container logs..."
     docker-compose -f "$SCRIPT_DIR/docker-compose.yml" logs zookeeper
     return 1
 }
@@ -177,7 +185,16 @@ if ! docker-compose -f "$SCRIPT_DIR/docker-compose.yml" ps | grep -q "Up"; then
         exit 1
     fi
 else
-    echo "✅ ZooKeeper is already running"
+    echo "ZooKeeper container is running, checking health..."
+    # Still need to verify ZooKeeper is actually ready
+    if ! check_zookeeper_ready; then
+        echo "❌ ZooKeeper container is running but not responding. Trying to restart..."
+        docker-compose -f "$SCRIPT_DIR/docker-compose.yml" restart zookeeper
+        if ! check_zookeeper_ready; then
+            exit 1
+        fi
+    fi
+    echo "✅ ZooKeeper is already running and healthy"
 fi
 
 # Build the project
