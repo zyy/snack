@@ -383,6 +383,72 @@ spi {
 
 ---
 
+## 🚀 快速演示
+
+想要快速体验 Snack RPC 的功能？试试我们的一键演示！
+
+### 选项1：本地演示（需要 Docker、Java 8+、Maven）
+```bash
+# 克隆仓库
+git clone https://github.com/zyy/snack.git
+cd snack
+
+# 运行演示
+chmod +x demo/run-demo.sh
+./demo/run-demo.sh
+```
+
+演示将：
+1. 启动 ZooKeeper 容器（通过 Docker）
+2. 构建 Snack RPC 项目
+3. 启动服务提供者（端口 9999）
+4. 启动 Web 消费者（端口 8080）
+5. 执行测试 RPC 调用并显示结果
+6. 保持所有服务运行，直到按 Ctrl+C
+
+### 选项2：GitHub Actions 演示
+每次推送到仓库都会触发 GitHub Actions 中的自动化演示：
+- 服务在容器化环境中启动
+- 自动测试 RPC 调用
+- 验证追踪和指标 API
+- 在 GitHub 的 "Actions" 标签页查看实时演示
+
+### 演示组件
+- **ZooKeeper 注册中心**: `localhost:2181` - 服务发现
+- **服务提供者**: `localhost:9999` - 暴露 `DemoService.hello()` 的 RPC 服务
+- **Web 消费者**: `localhost:8080` - 发起 RPC 调用的 Spring MVC 应用
+- **管理后台**: `localhost:9090` - 查看追踪和指标（如需手动启动）
+
+### 手动演示步骤
+如果想分别运行各个组件：
+
+```bash
+# 启动 ZooKeeper
+docker-compose -f demo/docker-compose.yml up -d
+
+# 构建项目
+mvn clean compile
+
+# 启动服务（在一个终端）
+cd snack-service-demo
+mvn spring-boot:run -Dspring-boot.run.jvmArguments="-Dserver.port=9999"
+
+# 启动 Web 消费者（在另一个终端）
+cd snack-web-demo
+mvn spring-boot:run -Dspring-boot.run.jvmArguments="-Dserver.port=8080"
+
+# 测试 RPC 调用
+curl http://localhost:8080/demo/hello
+# 应返回: "hello world"
+
+# 查看追踪（单独启动管理后台）
+cd snack-admin
+mvn spring-boot:run -Dspring-boot.run.jvmArguments="-Dserver.port=9090"
+curl http://localhost:9090/trace/list?limit=10
+```
+
+---
+
 ## License
 
 Apache License 2.0
