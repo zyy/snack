@@ -88,11 +88,7 @@ public class TraceCollector {
         return INSTANCE;
     }
     
-    /**
-     * @deprecated Use {@link #getInstance()} instead.
-     */
-    @Deprecated
-    public static final TraceCollector INSTANCE = getInstance();
+
     
     /**
      * Record a server-side span (when RPC request is received and processed).

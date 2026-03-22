@@ -151,7 +151,7 @@ public class ExtensionLoader<T> {
             Enumeration<URL> urls = getClassLoader().getResources(fileName);
             
             if (!urls.hasMoreElements()) {
-                logger.debug("No extension configuration files found for {}", type.getName());
+                logger.debug("No extension configuration files found for {}", new Object[]{type.getName()});
                 loaded = true;
                 return;
             }
@@ -163,7 +163,7 @@ public class ExtensionLoader<T> {
             
             loaded = true;
             logger.info("Loaded {} extensions for {}: {}", 
-                    cachedClasses.size(), type.getName(), cachedClasses.keySet());
+                    new Object[]{cachedClasses.size(), type.getName(), cachedClasses.keySet().toString()});
         } catch (Exception e) {
             logger.error("Failed to load extension classes for " + type.getName(), e);
         }
@@ -183,7 +183,7 @@ public class ExtensionLoader<T> {
                 try {
                     Class<?> clazz = Class.forName(line, false, getClassLoader());
                     if (!type.isAssignableFrom(clazz)) {
-                        logger.warn("Class {} does not implement {}", line, type.getName());
+                        logger.warn("Class {} does not implement {}", new Object[]{line, type.getName()});
                         continue;
                     }
                     
@@ -206,7 +206,7 @@ public class ExtensionLoader<T> {
                     }
                     
                     if (name == null || name.isEmpty()) {
-                        logger.warn("Extension class {} does not provide a name", line);
+                        logger.warn("Extension class {} does not provide a name", new Object[]{line});
                         continue;
                     }
                     

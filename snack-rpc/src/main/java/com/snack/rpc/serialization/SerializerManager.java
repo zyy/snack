@@ -4,6 +4,7 @@ import com.snack.rpc.RpcServer;
 import com.snack.rpc.spi.ExtensionLoader;
 import com.snack.rpc.spi.SerializerSPI;
 import com.typesafe.config.Config;
+import com.typesafe.config.ConfigValue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -186,8 +187,8 @@ public class SerializerManager {
         String configPath = "rpc.serialization." + serializerName;
         if (config.hasPath(configPath)) {
             Config serializerConfig = config.getConfig(configPath);
-            for (Map.Entry<String, Object> entry : serializerConfig.entrySet()) {
-                props.setProperty(entry.getKey(), entry.getValue().toString());
+            for (Map.Entry<String, ConfigValue> entry : serializerConfig.entrySet()) {
+                props.setProperty(entry.getKey(), entry.getValue().unwrapped().toString());
             }
         }
         
