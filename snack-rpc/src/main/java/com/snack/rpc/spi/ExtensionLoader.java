@@ -214,7 +214,7 @@ public class ExtensionLoader<T> {
                         // If duplicate name, keep the one with higher priority
                         int existingPriority = cachedPriorities.getOrDefault(name, 0);
                         if (priority > existingPriority) {
-                            logger.debug("Replacing extension {} with higher priority version", name);
+                            logger.debug("Replacing extension {} with higher priority version", new Object[]{name});
                             cachedClasses.put(name, clazz);
                             cachedPriorities.put(name, priority);
                             cachedInstances.remove(name); // Remove old instance
