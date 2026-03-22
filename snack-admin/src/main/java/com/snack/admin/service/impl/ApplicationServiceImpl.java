@@ -1,6 +1,7 @@
 package com.snack.admin.service.impl;
 
 import com.snack.admin.service.ApplicationService;
+import com.snack.rpc.registry.InstanceDetails;
 import com.snack.rpc.registry.ZooRegistry;
 import org.apache.curator.x.discovery.ServiceInstance;
 import org.slf4j.Logger;
@@ -24,11 +25,11 @@ public class ApplicationServiceImpl implements ApplicationService {
         try {
             List<String> serviceNames = ZooRegistry.getInstance().queryForNames();
             for (String serviceName : serviceNames) {
-                List<ServiceInstance> serviceInstances = ZooRegistry.getInstance().queryForInstances(serviceName);
+                List<ServiceInstance<InstanceDetails>> serviceInstances = ZooRegistry.getInstance().queryForInstances(serviceName);
                 if (null == serviceInstances) {
                     instancesMap.put(serviceName, Collections.emptyList());
                 } else {
-                    instancesMap.put(serviceName, serviceInstances);
+                    instancesMap.put(serviceName, (List) serviceInstances);
                 }
             }
             return instancesMap;
@@ -40,6 +41,6 @@ public class ApplicationServiceImpl implements ApplicationService {
 
     @Override
     public List getServiceInstances(String serviceName) {
-        return ZooRegistry.getInstance().queryForInstances(serviceName);
+        return (List) ZooRegistry.getInstance().queryForInstances(serviceName);
     }
 }

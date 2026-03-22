@@ -1,5 +1,12 @@
 package com.snack.rpc.codec;
 
+/**
+ * Created by yangyang.zhao on 2017/8/8.
+ */
+
+
+
+
 import org.codehaus.jackson.map.annotate.JsonRootName;
 
 /**

@@ -1,6 +1,13 @@
 package com.snack.rpc.codec;
 
 /**
+ * Created by yangyang.zhao on 2017/8/8.
+ */
+
+
+
+
+/**
  * RPC response message.
  */
 public class ResponseMessage {
