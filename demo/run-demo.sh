@@ -200,7 +200,7 @@ fi
 # Build the project
 echo ""
 echo "Building Snack RPC project..."
-mvn clean compile -DskipTests
+mvn clean package -DskipTests
 
 # Backup original configs and create demo configuration
 echo ""
@@ -219,17 +219,17 @@ echo "========================================"
 echo ""
 echo "1. Starting Service Provider (port 9999)..."
 cd snack-service-demo
-mvn spring-boot:run -Dspring-boot.run.jvmArguments="-Dserver.port=9999" > "$LOGS_DIR/service.log" 2>&1 &
+java -Dspring.output.ansi.enabled=NEVER -jar target/snack-service-demo-1.0-SNAPSHOT-exec.jar --server.port=9999 > "$LOGS_DIR/service.log" 2>&1 &
 SERVICE_PID=$!
 cd ..
 
-echo "Waiting for service to start (max 30 seconds)..."
-for i in {1..30}; do
+echo "Waiting for service to start (max 45 seconds)..."
+for i in {1..45}; do
     if curl -s --connect-timeout 2 http://localhost:9999 2>/dev/null > /dev/null; then
         echo "✅ Service Provider is up after $i seconds"
         break
-    elif [ $i -eq 30 ]; then
-        echo "❌ Service Provider failed to start within 30 seconds"
+    elif [ $i -eq 45 ]; then
+        echo "❌ Service Provider failed to start within 45 seconds"
         echo "Service logs (last 50 lines):"
         tail -50 "$LOGS_DIR/service.log"
         exit 1
@@ -242,17 +242,17 @@ done
 echo ""
 echo "2. Starting Web Consumer (port 8080)..."
 cd snack-web-demo
-mvn spring-boot:run -Dspring-boot.run.jvmArguments="-Dserver.port=8080" > "$LOGS_DIR/web.log" 2>&1 &
+java -Dspring.output.ansi.enabled=NEVER -jar target/snack-web-demo-1.0-SNAPSHOT-exec.jar --server.port=8080 > "$LOGS_DIR/web.log" 2>&1 &
 WEB_PID=$!
 cd ..
 
-echo "Waiting for web consumer to start (max 30 seconds)..."
-for i in {1..30}; do
+echo "Waiting for web consumer to start (max 45 seconds)..."
+for i in {1..45}; do
     if curl -s --connect-timeout 2 http://localhost:8080 2>/dev/null > /dev/null; then
         echo "✅ Web Consumer is up after $i seconds"
         break
-    elif [ $i -eq 30 ]; then
-        echo "❌ Web Consumer failed to start within 30 seconds"
+    elif [ $i -eq 45 ]; then
+        echo "❌ Web Consumer failed to start within 45 seconds"
         echo "Web logs (last 50 lines):"
         tail -50 "$LOGS_DIR/web.log"
         exit 1
