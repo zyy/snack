@@ -1,14 +1,8 @@
 package com.snack.rpc.codec;
 
 /**
- * Created by yangyang.zhao on 2017/8/8.
- */
-
-
-
-
-/**
  * RPC response message.
+ * Created by yangyang.zhao on 2017/8/8.
  */
 public class ResponseMessage {
     private boolean success;
@@ -16,6 +10,7 @@ public class ResponseMessage {
     private String messageID;
     private String errorInfo;
     private int errorCode;
+    private String traceId; // trace ID for cross-node correlation
 
     public boolean isSuccess() { return success; }
     public void setSuccess(boolean success) { this.success = success; }
@@ -31,6 +26,9 @@ public class ResponseMessage {
 
     public int getErrorCode() { return errorCode; }
     public void setErrorCode(int errorCode) { this.errorCode = errorCode; }
+    
+    public String getTraceId() { return traceId; }
+    public void setTraceId(String traceId) { this.traceId = traceId; }
 
     @Override
     public String toString() {
@@ -40,6 +38,7 @@ public class ResponseMessage {
                 ", messageID='" + messageID + '\'' +
                 ", errorInfo='" + errorInfo + '\'' +
                 ", errorCode=" + errorCode +
+                ", traceId='" + traceId + '\'' +
                 '}';
     }
 

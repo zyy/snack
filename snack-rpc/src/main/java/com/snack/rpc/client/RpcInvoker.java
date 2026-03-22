@@ -1,6 +1,8 @@
 package com.snack.rpc.client;
 
 import com.snack.rpc.RpcServer;
+import com.snack.rpc.trace.TraceCollector;
+import com.snack.rpc.trace.TraceContext;
 import com.snack.rpc.codec.RequestMessage;
 import com.snack.rpc.codec.ResponseMessage;
 import com.snack.rpc.registry.InstanceDetails;
@@ -67,6 +69,8 @@ public class RpcInvoker implements InvocationHandler {
     private final int timeout;
     private final InvokerBalancer balancer;
     private final ChannelPoolMap<InetSocketAddress, SimpleChannelPool> poolMap;
+    private final TraceCollector tracer;
+    private final TraceContext traceContext;
     
     // Per-service circuit breakers (keyed by server address)
     private final ConcurrentHashMap<String, CircuitBreaker> circuitBreakers = new ConcurrentHashMap<>();
@@ -98,6 +102,9 @@ public class RpcInvoker implements InvocationHandler {
                 return new SimpleChannelPool(bootstrap.remoteAddress(key), new ClientChannelPoolHandler());
             }
         };
+        
+        this.tracer = TraceCollector.INSTANCE;
+        this.traceContext = TraceContext.newRoot();
         
         logger.info("RpcInvoker created for service={}, timeout={}ms, retry={}, policy={}",
                 new Object[]{server, timeout, retryEnabled, retryPolicy});
@@ -176,7 +183,7 @@ public class RpcInvoker implements InvocationHandler {
     }
     
     /**
-     * Core invoke logic with retry and circuit breaker.
+     * Core invoke logic with retry, circuit breaker, and tracing.
      */
     private Object doInvoke(String methodName, Object[] args) throws Throwable {
         List<ServiceInstance<InstanceDetails>> instances = ZooRegistry.getInstance().queryForInstances(server);
@@ -192,6 +199,10 @@ public class RpcInvoker implements InvocationHandler {
         Exception lastEx = null;
         
         for (int attempt = 1; attempt <= retryPolicy.getMaxAttempts(); attempt++) {
+            // Create child span for this attempt
+            final TraceContext spanContext = traceContext.childSpan();
+            final long attemptStart = System.currentTimeMillis();
+            
             // Pick server
             InetSocketAddress target = balancer.select(serverList);
             if (target == null) continue;
@@ -202,18 +213,29 @@ public class RpcInvoker implements InvocationHandler {
                     k -> createCircuitBreaker()
             );
             if (!cb.allowRequest()) {
-                logger.warn("Circuit breaker OPEN for {}, skipping to next node", target);
+                logger.warn("Circuit breaker OPEN for {}, skipping to next node", new Object[]{target});
                 balancer.onFailure(target, serverList);
                 continue;
             }
             
             try {
-                Object result = getResponse(methodName, args, target);
+                Object result = getResponse(methodName, args, target, spanContext);
                 cb.recordSuccess();
+                
+                // Record successful client span
+                long duration = System.currentTimeMillis() - attemptStart;
+                tracer.recordClientSpan(spanContext, server, methodName, 
+                        target.toString(), true, duration, null);
+                
                 return result;
             } catch (Exception e) {
                 lastEx = e;
                 cb.recordFailure();
+                
+                // Record failed client span
+                long duration = System.currentTimeMillis() - attemptStart;
+                tracer.recordClientSpan(spanContext, server, methodName, 
+                        target.toString(), false, duration, e.getMessage());
                 
                 boolean shouldRetry = retryPolicy.isRetryable(e) 
                         && retryPolicy.shouldRetry(attempt);
@@ -226,7 +248,7 @@ public class RpcInvoker implements InvocationHandler {
                 if (shouldRetry && attempt < retryPolicy.getMaxAttempts()) {
                     long delay = retryPolicy.getDelayMs(attempt + 1);
                     if (delay > 0) {
-                        logger.debug("Retrying in {}ms...", delay);
+                        logger.debug("Retrying in {}ms...", new Object[]{delay});
                         Thread.sleep(delay);
                     }
                 }
@@ -286,7 +308,7 @@ public class RpcInvoker implements InvocationHandler {
         }
     }
 
-    private RequestMessage createRequestMessage(String service, String method, Object[] args, Class<?> clazz) {
+    private RequestMessage createRequestMessage(String service, String method, Object[] args, Class<?> clazz, TraceContext ctx) {
         RequestMessage req = new RequestMessage();
         req.setClientName(loadClientName());
         req.setServerName(service);
@@ -294,6 +316,7 @@ public class RpcInvoker implements InvocationHandler {
         req.setMethodName(method);
         req.setMessageID(UUID.randomUUID().toString());
         req.setParameters(args);
+        req.setTraceContext(ctx != null ? ctx.toHeader() : null);
         return req;
     }
     

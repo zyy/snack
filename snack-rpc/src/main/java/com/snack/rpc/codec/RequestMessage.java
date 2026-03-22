@@ -19,6 +19,9 @@ public class RequestMessage {
     private Object[] parameters;
     private String messageID;
     private String serverName;
+    
+    // Trace context for distributed tracing
+    private String traceContext; // format: traceId/spanId/parentSpanId/startTime
 
     public String getClientName() { return clientName; }
     public void setClientName(String clientName) { this.clientName = clientName; }
@@ -37,6 +40,9 @@ public class RequestMessage {
 
     public String getServerName() { return serverName; }
     public void setServerName(String serverName) { this.serverName = serverName; }
+    
+    public String getTraceContext() { return traceContext; }
+    public void setTraceContext(String traceContext) { this.traceContext = traceContext; }
 
     @Override
     public String toString() {
@@ -47,6 +53,7 @@ public class RequestMessage {
                 ", parameters=" + Arrays.toString(parameters) +
                 ", messageID='" + messageID + '\'' +
                 ", serverName='" + serverName + '\'' +
+                ", traceContext='" + traceContext + '\'' +
                 '}';
     }
 }
