@@ -1,6 +1,7 @@
 package com.snack.rpc.codec;
 
 import com.snack.rpc.serialization.ProtoStuffSerializer;
+import com.snack.rpc.serialization.SerializerManager;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageDecoder;
@@ -54,7 +55,9 @@ public class Decoder<T> extends ByteToMessageDecoder {
         if (in.readableBytes() >= length) {
             byte[] body = new byte[length];
             in.readBytes(body);
-            Object msg = ProtoStuffSerializer.serializer.deserialize(body, clazz);
+            
+            // Use SerializerManager instead of hardcoded ProtoStuffSerializer
+            Object msg = SerializerManager.getInstance().deserialize(body, clazz);
             out.add(msg);
 
             position = Position.HEADER;

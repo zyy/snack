@@ -3,6 +3,7 @@ package com.snack.rpc.codec.server;
 import com.snack.rpc.codec.HeartbeatMessage;
 import com.snack.rpc.codec.ResponseMessage;
 import com.snack.rpc.serialization.ProtoStuffSerializer;
+import com.snack.rpc.serialization.SerializerManager;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.MessageToByteEncoder;
@@ -28,7 +29,7 @@ public class ServerEncoder extends MessageToByteEncoder<Object> {
     
     private void encodeResponse(ResponseMessage msg, ByteBuf out) throws Exception {
         // "Response " + [length] + "\r\n" + [body]
-        byte[] msgBytes = ProtoStuffSerializer.serializer.serialize(msg);
+        byte[] msgBytes = SerializerManager.getInstance().serialize(msg);
         out.writeBytes(RESPONSE_HEADER);
         out.writeBytes(Integer.toString(msgBytes.length).getBytes(StandardCharsets.US_ASCII));
         out.writeBytes(CRLF);

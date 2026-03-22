@@ -10,6 +10,7 @@ package com.snack.rpc.codec.client;
 import com.snack.rpc.codec.HeartbeatMessage;
 import com.snack.rpc.codec.RequestMessage;
 import com.snack.rpc.serialization.ProtoStuffSerializer;
+import com.snack.rpc.serialization.SerializerManager;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.MessageToByteEncoder;
@@ -35,7 +36,7 @@ public class ClientEncoder extends MessageToByteEncoder<Object> {
     
     private void encodeRequest(RequestMessage msg, ByteBuf out) throws Exception {
         // "Request " + [length] + "\r\n" + [body]
-        byte[] msgBytes = ProtoStuffSerializer.serializer.serialize(msg);
+        byte[] msgBytes = SerializerManager.getInstance().serialize(msg);
         out.writeBytes(REQUEST_HEADER);
         out.writeBytes(Integer.toString(msgBytes.length).getBytes(StandardCharsets.US_ASCII));
         out.writeBytes(CRLF);

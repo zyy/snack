@@ -3,6 +3,8 @@ package com.snack.rpc.client;
 import com.snack.rpc.RpcServer;
 import com.snack.rpc.trace.TraceCollector;
 import com.snack.rpc.trace.TraceContext;
+import com.snack.rpc.spi.ExtensionLoader;
+import com.snack.rpc.spi.LoadBalanceSPI;
 import com.snack.rpc.codec.RequestMessage;
 import com.snack.rpc.codec.ResponseMessage;
 import com.snack.rpc.registry.InstanceDetails;
@@ -58,6 +60,7 @@ public class RpcInvoker implements InvocationHandler {
     private static final String CFG_CB_HALFOPEN = "rpc.circuitBreaker.halfOpenMaxCalls";
     private static final String CFG_RATE_LIMIT = "rpc.rateLimit.qps";
     private static final String CFG_RATE_BURST = "rpc.rateLimit.burst";
+    private static final String CFG_LOADBALANCE = "spi.loadbalance";
     
     // Defaults
     private static final int DEFAULT_TIMEOUT = 5000;
@@ -89,7 +92,15 @@ public class RpcInvoker implements InvocationHandler {
         this.retryEnabled = loadBool(CFG_RETRY_ENABLE, true);
         this.retryPolicy = buildRetryPolicy();
         this.rateLimiter = buildRateLimiter();
-        this.balancer = InvokerBalancer.get("RR");
+        
+        // Load load balancer from config
+        String loadBalanceMode = "RR"; // default
+        try {
+            loadBalanceMode = RpcServer.getConfig().getString(CFG_LOADBALANCE);
+        } catch (Exception e) {
+            // use default
+        }
+        this.balancer = InvokerBalancer.get(loadBalanceMode);
         
         EventLoopGroup group = new NioEventLoopGroup();
         Bootstrap bootstrap = new Bootstrap()
@@ -341,33 +352,49 @@ public class RpcInvoker implements InvocationHandler {
         void onFailure(InetSocketAddress failed, List<InetSocketAddress> addresses);
         
         static InvokerBalancer get(String mode) {
-            if (mode != null && mode.equals("RR")) return new RoundRobinBalancer();
-            return new RandomBalancer();
+            // Use SPI to load load balancer
+            ExtensionLoader<LoadBalanceSPI> loader = ExtensionLoader.getExtensionLoader(LoadBalanceSPI.class);
+            LoadBalanceSPI spi = null;
+            
+            if (mode != null) {
+                try {
+                    spi = loader.getExtension(mode.toLowerCase());
+                } catch (IllegalArgumentException e) {
+                    // Fall back to default
+                }
+            }
+            
+            if (spi == null) {
+                // Try to get default (roundrobin)
+                try {
+                    spi = loader.getExtension("roundrobin");
+                } catch (IllegalArgumentException e) {
+                    // Fall back to random if roundrobin not found
+                    spi = loader.getExtension("random");
+                }
+            }
+            
+            return new LoadBalanceSPIAdapter(spi);
         }
         
-        class RoundRobinBalancer implements InvokerBalancer {
-            private final AtomicInteger counter = new AtomicInteger();
+        /**
+         * Adapter to convert LoadBalanceSPI to InvokerBalancer interface.
+         */
+        class LoadBalanceSPIAdapter implements InvokerBalancer {
+            private final LoadBalanceSPI spi;
+            
+            LoadBalanceSPIAdapter(LoadBalanceSPI spi) {
+                this.spi = spi;
+            }
+            
             @Override
             public InetSocketAddress select(List<InetSocketAddress> addresses) {
-                if (addresses == null || addresses.isEmpty()) return null;
-                return addresses.get(Math.abs(counter.getAndIncrement() % addresses.size()));
+                return spi.select(addresses);
             }
+            
             @Override
             public void onFailure(InetSocketAddress failed, List<InetSocketAddress> addresses) {
-                addresses.remove(failed);
-            }
-        }
-        
-        class RandomBalancer implements InvokerBalancer {
-            private final Random random = new Random();
-            @Override
-            public InetSocketAddress select(List<InetSocketAddress> addresses) {
-                if (addresses == null || addresses.isEmpty()) return null;
-                return addresses.get(random.nextInt(addresses.size()));
-            }
-            @Override
-            public void onFailure(InetSocketAddress failed, List<InetSocketAddress> addresses) {
-                addresses.remove(failed);
+                spi.onFailure(failed, addresses);
             }
         }
     }

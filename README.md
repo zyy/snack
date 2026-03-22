@@ -295,6 +295,67 @@ snack/
 
 ---
 
+## SPI 扩展机制
+
+Snack RPC 框架支持通过 SPI (Service Provider Interface) 机制扩展核心组件：
+
+### 1. 序列化 SPI
+- **接口**: `SerializerSPI`
+- **默认实现**: `ProtoStuffSerializer` ("protostuff")
+- **配置**: `spi.serialization = "protostuff"`
+
+**添加自定义序列化器**:
+1. 实现 `SerializerSPI` 接口
+2. 在 `META-INF/services/com.snack.rpc.spi.SerializerSPI` 中注册
+3. 在配置中指定: `spi.serialization = "your-serializer"`
+
+### 2. 负载均衡 SPI
+- **接口**: `LoadBalanceSPI`
+- **内置实现**: `RoundRobinLoadBalance` ("roundrobin"), `RandomLoadBalance` ("random")
+- **配置**: `spi.loadbalance = "roundrobin"`
+
+**添加自定义负载均衡器**:
+1. 实现 `LoadBalanceSPI` 接口
+2. 在 `META-INF/services/com.snack.rpc.spi.LoadBalanceSPI` 中注册
+3. 在配置中指定: `spi.loadbalance = "your-balancer"`
+
+### 3. 注册中心 SPI
+- **接口**: `RegistrySPI`
+- **默认实现**: `ZooKeeperRegistrySPI` ("zookeeper")
+- **配置**: `spi.registry = "zookeeper"`
+
+**添加自定义注册中心**:
+1. 实现 `RegistrySPI` 接口
+2. 在 `META-INF/services/com.snack.rpc.spi.RegistrySPI` 中注册
+3. 在配置中指定: `spi.registry = "your-registry"`
+
+### 配置示例
+```hocon
+spi {
+  serialization = "protostuff"
+  loadbalance = "roundrobin"
+  registry = "zookeeper"
+  
+  # 序列化器特定配置
+  serialization.protostuff {
+    bufferSize = 4096
+  }
+  
+  # 负载均衡器特定配置
+  loadbalance.roundrobin {
+    # 轮询特定配置
+  }
+  
+  # 注册中心特定配置
+  registry.zookeeper {
+    connectString = "localhost:2181"
+    basePath = "/snack/serviceDiscovery"
+  }
+}
+```
+
+---
+
 ## 开发进度
 
 - [x] **第一阶段：稳定性**
@@ -315,10 +376,10 @@ snack/
   - [x] 监控指标（Metrics） - QPS、成功率、延迟百分位（P50/P90/P99）等指标收集
   - [x] 完善 Admin 后台 - 新增 `/trace/*` API 端点，支持查看 traces、metrics 数据
 
-- [ ] **第四阶段：扩展性**
-  - [ ] 序列化 SPI 扩展
-  - [ ] 负载均衡 SPI 扩展
-  - [ ] 注册中心 SPI 扩展
+- [x] **第四阶段：扩展性**
+  - [x] 序列化 SPI 扩展 - 支持 SPI 加载不同的序列化实现（ProtoStuff 为默认）
+  - [x] 负载均衡 SPI 扩展 - 支持 SPI 加载 RoundRobin、Random 等负载均衡算法
+  - [x] 注册中心 SPI 扩展 - 支持 SPI 加载不同注册中心（ZooKeeper 为默认）
 
 ---
 

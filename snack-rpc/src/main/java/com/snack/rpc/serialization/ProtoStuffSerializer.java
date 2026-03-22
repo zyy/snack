@@ -1,5 +1,6 @@
 package com.snack.rpc.serialization;
 
+import com.snack.rpc.spi.SerializerSPI;
 import io.protostuff.LinkedBuffer;
 import io.protostuff.ProtostuffIOUtil;
 import io.protostuff.Schema;
@@ -10,7 +11,7 @@ import org.objenesis.ObjenesisStd;
 /**
  * Created by yangyang.zhao on 2017/8/8.
  */
-public class ProtoStuffSerializer implements Serializer {
+public class ProtoStuffSerializer implements SerializerSPI {
     private static Objenesis objenesis = new ObjenesisStd(true);
 
     public static final ProtoStuffSerializer serializer = new ProtoStuffSerializer();
@@ -58,5 +59,27 @@ public class ProtoStuffSerializer implements Serializer {
             throw new IllegalStateException(e.getMessage(), e);
         }
     }
-
+    
+    // ========== SerializerSPI implementation ==========
+    
+    @Override
+    public String getName() {
+        return "protostuff";
+    }
+    
+    @Override
+    public int getPriority() {
+        return 100; // High priority as default serializer
+    }
+    
+    @Override
+    public void initialize(java.util.Properties config) {
+        // ProtoStuff doesn't need initialization
+    }
+    
+    @Override
+    public boolean supports(Class<?> clazz) {
+        // ProtoStuff supports most Java objects via runtime schema
+        return true;
+    }
 }
