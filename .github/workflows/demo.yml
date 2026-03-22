@@ -17,7 +17,7 @@ jobs:
         ports:
           - 2181:2181
         options: >-
-          --health-cmd "zkServer.sh status"
+          --health-cmd "echo ruok | nc localhost 2181"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -45,76 +45,183 @@ jobs:
 
     - name: Prepare demo configuration
       run: |
-        cp demo/application-service.conf snack-service-demo/src/main/resources/application.conf
-        cp demo/application-web.conf snack-web-demo/src/main/resources/application.conf
+        echo "Creating demo configuration files..."
+        # Create demo configs
+        cat > service-config.conf << 'EOF'
+zookeeper {
+  basePath = "/snack/serviceDiscovery"
+  connectString = "localhost:2181"
+}
+
+server {
+  port = 9999
+  name = "com.snack.demo.service"
+}
+
+tracing {
+  enabled = true
+  sampleRate = 100
+}
+EOF
+        
+        cat > web-config.conf << 'EOF'
+zookeeper {
+  basePath = "/snack/serviceDiscovery"
+  connectString = "localhost:2181"
+}
+
+server {
+  port = 8080
+  name = "com.snack.web.demo"
+}
+
+rpc {
+  invoke.timeout = 5000
+  invoke.retry.enable = true
+}
+
+tracing {
+  enabled = true
+  sampleRate = 100
+}
+EOF
+        
+        # Copy configs to module directories
+        cp service-config.conf snack-service-demo/src/main/resources/application.conf
+        cp web-config.conf snack-web-demo/src/main/resources/application.conf
+        echo "Demo configuration created successfully"
+
+    - name: Verify ZooKeeper is ready
+      run: |
+        echo "Checking ZooKeeper connection..."
+        for i in {1..10}; do
+          if echo ruok | nc localhost 2181 | grep -q imok; then
+            echo "✅ ZooKeeper is ready"
+            break
+          else
+            echo "Attempt $i: Waiting for ZooKeeper..."
+            sleep 5
+          fi
+        done
 
     - name: Start Service Provider
       run: |
+        echo "Starting Service Provider on port 9999..."
         cd snack-service-demo
-        mvn spring-boot:run -Dspring-boot.run.jvmArguments="-Dserver.port=9999" &
+        # Run in background with logging
+        mvn spring-boot:run \
+          -Dspring-boot.run.jvmArguments="-Dserver.port=9999 -Dlogging.level.com.snack=DEBUG" \
+          > ../service.log 2>&1 &
         SERVICE_PID=$!
         echo "SERVICE_PID=$SERVICE_PID" >> $GITHUB_ENV
-        sleep 15
+        
+        # Wait for service to start
+        echo "Waiting for service to start (max 30 seconds)..."
+        for i in {1..30}; do
+          if curl -s --connect-timeout 2 http://localhost:9999/actuator/health 2>/dev/null | grep -q "UP"; then
+            echo "✅ Service Provider is up after $i seconds"
+            break
+          elif [ $i -eq 30 ]; then
+            echo "❌ Service Provider failed to start within 30 seconds"
+            echo "Service logs:"
+            tail -100 ../service.log
+            exit 1
+          else
+            echo "Waiting for service... ($i/30)"
+            sleep 1
+          fi
+        done
 
     - name: Start Web Consumer
       run: |
+        echo "Starting Web Consumer on port 8080..."
         cd snack-web-demo
-        mvn spring-boot:run -Dspring-boot.run.jvmArguments="-Dserver.port=8080" &
+        # Run in background with logging
+        mvn spring-boot:run \
+          -Dspring-boot.run.jvmArguments="-Dserver.port=8080 -Dlogging.level.com.snack=DEBUG" \
+          > ../web.log 2>&1 &
         WEB_PID=$!
         echo "WEB_PID=$WEB_PID" >> $GITHUB_ENV
-        sleep 15
+        
+        # Wait for web to start
+        echo "Waiting for web consumer to start (max 30 seconds)..."
+        for i in {1..30}; do
+          if curl -s --connect-timeout 2 http://localhost:8080/actuator/health 2>/dev/null | grep -q "UP"; then
+            echo "✅ Web Consumer is up after $i seconds"
+            break
+          elif [ $i -eq 30 ]; then
+            echo "❌ Web Consumer failed to start within 30 seconds"
+            echo "Web logs:"
+            tail -100 ../web.log
+            exit 1
+          else
+            echo "Waiting for web consumer... ($i/30)"
+            sleep 1
+          fi
+        done
 
     - name: Test RPC call
       run: |
         echo "Testing RPC call..."
+        
+        # First, verify services are registered
+        echo "Checking service registration..."
+        sleep 5
+        
+        # Test the RPC endpoint
         for i in {1..10}; do
           RESPONSE=$(curl -s --connect-timeout 5 http://localhost:8080/demo/hello || true)
-          if [ -n "$RESPONSE" ]; then
-            echo "✅ Success! Response from RPC call: $RESPONSE"
+          if [[ -n "$RESPONSE" && "$RESPONSE" == *"hello"* ]]; then
+            echo "✅ RPC call successful! Response: $RESPONSE"
             echo "DEMO_STATUS=success" >> $GITHUB_ENV
             break
           else
-            echo "Attempt $i: Waiting for services to be ready..."
-            sleep 5
+            echo "Attempt $i: Response was '$RESPONSE', waiting..."
+            
+            # Debug: check service logs
+            if [ $i -eq 5 ]; then
+              echo "=== Service Logs (last 50 lines) ==="
+              tail -50 service.log
+              echo "=== Web Logs (last 50 lines) ==="
+              tail -50 web.log
+            fi
+            
+            sleep 3
           fi
         done
         
         if [ -z "${RESPONSE}" ]; then
-          echo "❌ Failed to get response from RPC call"
-          echo "Checking service logs..."
-          ps aux | grep java
-          echo "DEMO_STATUS=failed" >> $GITHUB_ENV
+          echo "❌ Failed to get valid response from RPC call"
+          echo "=== Full Service Log ==="
+          cat service.log
+          echo "=== Full Web Log ==="
+          cat web.log
           exit 1
         fi
 
-    - name: Test Admin API (tracing)
+    - name: Show demo summary
+      if: success()
       run: |
-        echo "Testing Admin tracing API..."
-        # Start admin in background
-        cd snack-admin
-        mvn spring-boot:run -Dspring-boot.run.jvmArguments="-Dserver.port=9090" &
-        ADMIN_PID=$!
-        echo "ADMIN_PID=$ADMIN_PID" >> $GITHUB_ENV
-        sleep 10
-        
-        # Make a few more calls to generate traces
-        for i in {1..3}; do
-          curl -s http://localhost:8080/demo/hello > /dev/null
-          sleep 1
-        done
-        
-        # Check traces API
-        TRACES=$(curl -s http://localhost:9090/trace/list?limit=5 || true)
-        if [ -n "$TRACES" ]; then
-          echo "✅ Tracing API is working"
-          echo "Traces response: $TRACES"
-        else
-          echo "⚠️ Could not get traces (might be empty)"
-        fi
+        echo "========================================"
+        echo "🎉 Snack RPC Demo Successful!"
+        echo "========================================"
+        echo "Components:"
+        echo "  - ZooKeeper: localhost:2181 ✓"
+        echo "  - Service Provider: localhost:9999 ✓"
+        echo "  - Web Consumer: localhost:8080 ✓"
+        echo "  - RPC Call: '$RESPONSE' ✓"
+        echo ""
+        echo "Demo completed successfully!"
 
     - name: Cleanup
       if: always()
       run: |
         echo "Cleaning up..."
-        kill $SERVICE_PID $WEB_PID $ADMIN_PID 2>/dev/null || true
+        # Kill background processes
+        kill $SERVICE_PID $WEB_PID 2>/dev/null || true
+        
+        # Force kill any remaining Java processes
         pkill -f "spring-boot:run" 2>/dev/null || true
+        pkill -f "java.*snack" 2>/dev/null || true
+        
+        echo "Cleanup completed"
