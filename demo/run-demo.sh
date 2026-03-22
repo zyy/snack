@@ -55,6 +55,55 @@ cleanup() {
 # Set up trap for cleanup
 trap cleanup EXIT INT TERM
 
+# Function to check if ZooKeeper is ready
+check_zookeeper_ready() {
+    local max_attempts=10
+    local attempt=1
+    
+    echo "Waiting for ZooKeeper to be ready..."
+    
+    while [ $attempt -le $max_attempts ]; do
+        # Try different methods to check ZooKeeper
+        local zk_ready=false
+        
+        # Method 1: Use nc (netcat) if available
+        if command -v nc >/dev/null 2>&1; then
+            if echo ruok | nc localhost 2181 2>/dev/null | grep -q imok; then
+                zk_ready=true
+            fi
+        # Method 2: Use docker exec to check inside container
+        elif docker-compose -f "$SCRIPT_DIR/docker-compose.yml" ps -q zookeeper >/dev/null 2>&1; then
+            local container_id=$(docker-compose -f "$SCRIPT_DIR/docker-compose.yml" ps -q zookeeper)
+            if [ -n "$container_id" ]; then
+                if docker exec "$container_id" bash -c "echo ruok | nc localhost 2181 2>/dev/null | grep -q imok" 2>/dev/null; then
+                    zk_ready=true
+                fi
+            fi
+        # Method 3: Check if port is open (basic connectivity)
+        else
+            # Simple port check using bash built-in (may not work on all systems)
+            if (echo >/dev/tcp/localhost/2181) &>/dev/null; then
+                # Port is open, assume ZooKeeper is ready
+                echo "⚠️  Port 2181 is open but cannot verify ZooKeeper health. Assuming ready."
+                zk_ready=true
+            fi
+        fi
+        
+        if $zk_ready; then
+            echo "✅ ZooKeeper is ready after $attempt attempts"
+            return 0
+        fi
+        
+        echo "Attempt $attempt/$max_attempts: Waiting for ZooKeeper..."
+        sleep 5
+        attempt=$((attempt + 1))
+    done
+    
+    echo "❌ ZooKeeper failed to start within $max_attempts attempts"
+    docker-compose -f "$SCRIPT_DIR/docker-compose.yml" logs zookeeper
+    return 1
+}
+
 echo "========================================"
 echo "Snack RPC Framework Demo"
 echo "========================================"
@@ -64,33 +113,69 @@ echo "Checking prerequisites..."
 command -v java >/dev/null 2>&1 || { echo "❌ Java is required but not installed. Aborting."; exit 1; }
 echo "✅ Java: $(java -version 2>&1 | head -1)"
 
+# Try to locate Maven if not in PATH
+if ! command -v mvn >/dev/null 2>&1; then
+    echo "Maven not found in PATH, searching for installation..."
+    # Check common installation locations
+    if [ -d "$HOME/.local/opt/apache-maven-3.8.9" ]; then
+        export M2_HOME="$HOME/.local/opt/apache-maven-3.8.9"
+        export PATH="$M2_HOME/bin:$PATH"
+        echo "ℹ️  Maven found at $M2_HOME, added to PATH"
+    elif [ -d "/opt/homebrew/opt/maven" ]; then
+        export M2_HOME="/opt/homebrew/opt/maven"
+        export PATH="$M2_HOME/bin:$PATH"
+        echo "ℹ️  Maven found at $M2_HOME, added to PATH"
+    elif [ -d "/usr/local/apache-maven-3.8.9" ]; then
+        export M2_HOME="/usr/local/apache-maven-3.8.9"
+        export PATH="$M2_HOME/bin:$PATH"
+        echo "ℹ️  Maven found at $M2_HOME, added to PATH"
+    else
+        echo "❌ Maven not found in PATH or common locations"
+        echo "Please install Maven or set M2_HOME environment variable"
+        exit 1
+    fi
+fi
+
 command -v mvn >/dev/null 2>&1 || { echo "❌ Maven is required but not installed. Aborting."; exit 1; }
 echo "✅ Maven: $(mvn --version 2>&1 | head -1)"
 
 command -v docker >/dev/null 2>&1 || { echo "❌ Docker is required but not installed. Aborting."; exit 1; }
 echo "✅ Docker: $(docker --version 2>&1 | head -1)"
 
+# Check if Docker daemon is running
+if ! docker info >/dev/null 2>&1; then
+    echo "❌ Docker daemon is not running. Please start Docker Desktop or Docker service."
+    echo "On macOS, you can start Docker Desktop from Applications."
+    echo "On Linux, you can start Docker with: sudo systemctl start docker"
+    exit 1
+fi
+echo "✅ Docker daemon is running"
+
+# Check for docker-compose command
+if ! command -v docker-compose >/dev/null 2>&1; then
+    echo "❌ docker-compose command not found. Docker Compose is required."
+    echo "If using Docker Desktop, docker-compose should be included."
+    echo "You can install it separately with: brew install docker-compose"
+    exit 1
+fi
+echo "✅ docker-compose is available"
+
+# Check for nc (netcat) command
+if ! command -v nc >/dev/null 2>&1; then
+    echo "⚠️  nc (netcat) command not found. ZooKeeper health check may fail."
+    echo "You can install it with: brew install netcat"
+    # We'll try to use alternative method for ZooKeeper check
+fi
+
 # Start ZooKeeper
 echo ""
 echo "Starting ZooKeeper..."
 if ! docker-compose -f "$SCRIPT_DIR/docker-compose.yml" ps | grep -q "Up"; then
     docker-compose -f "$SCRIPT_DIR/docker-compose.yml" up -d
-    echo "Waiting for ZooKeeper to be ready..."
-    
-    # Wait for ZooKeeper to be ready
-    for i in {1..10}; do
-        if echo ruok | nc localhost 2181 2>/dev/null | grep -q imok; then
-            echo "✅ ZooKeeper is ready after $i attempts"
-            break
-        elif [ $i -eq 10 ]; then
-            echo "❌ ZooKeeper failed to start within 50 seconds"
-            docker-compose -f "$SCRIPT_DIR/docker-compose.yml" logs
-            exit 1
-        else
-            echo "Attempt $i: Waiting for ZooKeeper..."
-            sleep 5
-        fi
-    done
+    # Use our function to check if ZooKeeper is ready
+    if ! check_zookeeper_ready; then
+        exit 1
+    fi
 else
     echo "✅ ZooKeeper is already running"
 fi
