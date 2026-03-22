@@ -23,6 +23,12 @@
             <artifactId>bootstrap</artifactId>
             <version>3.3.7</version>
         </dependency>
+        <!-- Snack RPC core for tracing -->
+        <dependency>
+            <groupId>com.snack</groupId>
+            <artifactId>snack-rpc</artifactId>
+            <version>${project.version}</version>
+        </dependency>
     </dependencies>
 
 </project>

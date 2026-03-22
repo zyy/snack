@@ -103,7 +103,7 @@ public class RpcInvoker implements InvocationHandler {
             }
         };
         
-        this.tracer = TraceCollector.INSTANCE;
+        this.tracer = TraceCollector.getInstance();
         this.traceContext = TraceContext.newRoot();
         
         logger.info("RpcInvoker created for service={}, timeout={}ms, retry={}, policy={}",
@@ -270,7 +270,7 @@ public class RpcInvoker implements InvocationHandler {
         return circuitBreakers.get(addr.toString());
     }
     
-    private Object getResponse(String methodName, Object[] args, InetSocketAddress target) throws Exception {
+    private Object getResponse(String methodName, Object[] args, InetSocketAddress target, TraceContext ctx) throws Exception {
         final SimpleChannelPool pool = poolMap.get(target);
         Future<Channel> future = pool.acquire().awaitUninterruptibly();
         
@@ -283,7 +283,7 @@ public class RpcInvoker implements InvocationHandler {
             
             channel.reset();
             
-            RequestMessage req = createRequestMessage(server, methodName, args, clazz);
+            RequestMessage req = createRequestMessage(server, methodName, args, clazz, ctx);
             channel.writeAndFlush(req).awaitUninterruptibly();
             
             ResponseMessage resp = channel.get(timeout);

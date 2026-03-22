@@ -1,7 +1,9 @@
 package com.snack.rpc.trace;
 
+import com.snack.rpc.RpcServer;
 import com.snack.rpc.codec.ResponseMessage;
 import com.snack.rpc.server.ServerHandler;
+import com.typesafe.config.Config;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,18 +28,71 @@ public class TraceCollector {
     // In-memory trace storage (in production, use a real metrics library)
     private final ConcurrentLinkedDeque<Span> recentSpans = new ConcurrentLinkedDeque<>();
     private final ConcurrentHashMap<String, ServiceMetrics> serviceMetrics = new ConcurrentHashMap<>();
-    private final int maxSpans = 10000; // keep last 10k spans in memory
+    private final int maxSpans; // keep last N spans in memory
+    private final int latencyWindow; // window size for latency percentile calculations
     
     // Config
     private final boolean enabled;
     private final int sampleRate; // 0-100, percent of calls to trace
     
     public TraceCollector(boolean enabled, int sampleRate) {
-        this.enabled = enabled;
-        this.sampleRate = Math.max(0, Math.min(100, sampleRate));
+        this(enabled, sampleRate, 10000, 1000);
     }
     
-    public static TraceCollector INSTANCE = new TraceCollector(true, 100);
+    public TraceCollector(boolean enabled, int sampleRate, int maxSpans, int latencyWindow) {
+        this.enabled = enabled;
+        this.sampleRate = Math.max(0, Math.min(100, sampleRate));
+        this.maxSpans = maxSpans > 0 ? maxSpans : 10000;
+        this.latencyWindow = latencyWindow > 0 ? latencyWindow : 1000;
+    }
+    
+    /**
+     * Create TraceCollector from configuration.
+     */
+    public static TraceCollector fromConfig(Config config) {
+        if (config == null) {
+            return new TraceCollector(true, 100);
+        }
+        boolean enabled = config.hasPath("tracing.enabled") 
+                ? config.getBoolean("tracing.enabled") : true;
+        int sampleRate = config.hasPath("tracing.sampleRate") 
+                ? config.getInt("tracing.sampleRate") : 100;
+        int maxSpans = config.hasPath("tracing.maxSpans") 
+                ? config.getInt("tracing.maxSpans") : 10000;
+        int latencyWindow = config.hasPath("tracing.latencyWindow") 
+                ? config.getInt("tracing.latencyWindow") : 1000;
+        return new TraceCollector(enabled, sampleRate, maxSpans, latencyWindow);
+    }
+    
+    private static volatile TraceCollector INSTANCE = null;
+    
+    /**
+     * Get the global TraceCollector instance, initialized from config if needed.
+     */
+    public static TraceCollector getInstance() {
+        if (INSTANCE == null) {
+            synchronized (TraceCollector.class) {
+                if (INSTANCE == null) {
+                    try {
+                        Config config = RpcServer.getConfig();
+                        INSTANCE = fromConfig(config);
+                        logger.info("TraceCollector initialized from config: enabled={}, sampleRate={}%", 
+                                INSTANCE.enabled, INSTANCE.sampleRate);
+                    } catch (Exception e) {
+                        logger.warn("Failed to load tracing config, using defaults", e);
+                        INSTANCE = new TraceCollector(true, 100);
+                    }
+                }
+            }
+        }
+        return INSTANCE;
+    }
+    
+    /**
+     * @deprecated Use {@link #getInstance()} instead.
+     */
+    @Deprecated
+    public static final TraceCollector INSTANCE = getInstance();
     
     /**
      * Record a server-side span (when RPC request is received and processed).
@@ -180,7 +235,7 @@ public class TraceCollector {
     /**
      * Aggregated metrics for a service method.
      */
-    public static class ServiceMetrics {
+    public class ServiceMetrics {
         private final AtomicLong totalCalls = new AtomicLong();
         private final AtomicLong successCalls = new AtomicLong();
         private final AtomicLong failureCalls = new AtomicLong();
@@ -188,7 +243,15 @@ public class TraceCollector {
         private final AtomicLong minLatency = new AtomicLong(Long.MAX_VALUE);
         private final AtomicLong maxLatency = new AtomicLong();
         private final ConcurrentLinkedDeque<Long> latencies = new ConcurrentLinkedDeque<>();
-        private static final int LATENCY_WINDOW = 1000; // last 1000 latencies for percentile
+        private final int latencyWindow;
+        
+        public ServiceMetrics() {
+            this.latencyWindow = TraceCollector.this.latencyWindow;
+        }
+        
+        public ServiceMetrics(int latencyWindow) {
+            this.latencyWindow = latencyWindow > 0 ? latencyWindow : 1000;
+        }
         
         public void record(Span span) {
             totalCalls.incrementAndGet();
@@ -203,7 +266,7 @@ public class TraceCollector {
             maxLatency.updateAndGet(v -> Math.max(v, span.durationMs));
             
             latencies.addLast(span.durationMs);
-            while (latencies.size() > LATENCY_WINDOW) {
+            while (latencies.size() > latencyWindow) {
                 latencies.removeFirst();
             }
         }

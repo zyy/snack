@@ -310,10 +310,10 @@ snack/
   - [x] 限流器（RateLimiter）
   - [x] 可配置重试策略
 
-- [ ] **第三阶段：可观测性**
-  - [ ] 链路追踪（TraceId 透传）
-  - [ ] 监控指标（Metrics）
-  - [ ] 完善 Admin 后台
+- [x] **第三阶段：可观测性**
+  - [x] 链路追踪（TraceId 透传） - 支持分布式 TraceId 透传、采样率配置
+  - [x] 监控指标（Metrics） - QPS、成功率、延迟百分位（P50/P90/P99）等指标收集
+  - [x] 完善 Admin 后台 - 新增 `/trace/*` API 端点，支持查看 traces、metrics 数据
 
 - [ ] **第四阶段：扩展性**
   - [ ] 序列化 SPI 扩展

@@ -45,7 +45,7 @@ public class ServerHandler extends ChannelDuplexHandler {
     private final TraceCollector tracer;
 
     public ServerHandler(RpcServer rpcServer) {
-        this(rpcServer, TraceCollector.INSTANCE);
+        this(rpcServer, TraceCollector.getInstance());
     }
     
     public ServerHandler(RpcServer rpcServer, TraceCollector tracer) {
