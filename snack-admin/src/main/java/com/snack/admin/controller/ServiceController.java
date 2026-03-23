@@ -3,7 +3,6 @@ package com.snack.admin.controller;
 import com.snack.admin.service.ApplicationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
@@ -18,33 +17,9 @@ public class ServiceController {
     @Autowired
     private ApplicationService applicationService;
 
-    // ====================
-    // Page Mappings
-    // ====================
-    
     @RequestMapping("/")
     public String home() {
         return "redirect:/dashboard";
-    }
-    
-    @RequestMapping("/dashboard")
-    public String dashboard() {
-        return "dashboard";
-    }
-    
-    @RequestMapping("/services")
-    public String services() {
-        return "services";
-    }
-    
-    @RequestMapping("/circuit-breakers")
-    public String circuitBreakers() {
-        return "circuit_breakers";
-    }
-    
-    @RequestMapping("/system")
-    public String system() {
-        return "system";
     }
     
     @RequestMapping("/service/detail")
@@ -53,10 +28,6 @@ public class ServiceController {
         model.put("serviceInstances", this.applicationService.getServiceInstances(serviceName));
         return "service_detail";
     }
-    
-    // ====================
-    // Legacy Mappings
-    // ====================
     
     @RequestMapping("/service/list")
     public String serviceList(Map<String, Object> model) {
