@@ -30,70 +30,25 @@
 
 ## 架构
 
-> 📊 **交互式架构图**: [docs/architecture.html](docs/architecture.html)
+### 📊 架构图
 
-### 整体架构
+![Snack RPC Architecture](docs/architecture.svg)
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         👤 Client Side                            │
-│  ┌──────────┐  ┌───────────┐  ┌───────────┐  ┌────────────┐   │
-│  │ RpcFuture│  │CircuitBreaker│ │RateLimiter│  │RetryPolicy│   │
-│  │ Async/   │  │ CLOSED/    │  │Token Bucket│  │Exponential/│   │
-│  │ Callback │  │OPEN/HALF   │  │   QPS      │  │Fixed/Fib   │   │
-│  └────┬─────┘  └─────┬─────┘  └─────┬─────┘  └─────┬──────┘   │
-│       └───────────────┴───────────┴───────────┘              │
-│                          │                                      │
-│              ┌───────────▼───────────┐                        │
-│              │     RpcInvoker        │                        │
-│              │   (Dynamic Proxy)     │                        │
-│              │   Load Balance         │                        │
-│              │   RoundRobin / Random  │                        │
-│              └───────────┬───────────┘                        │
-└──────────────────────────┼────────────────────────────────────┘
-                           │ TCP (Netty ChannelPool)
-┌──────────────────────────▼────────────────────────────────────┐
-│                        🖥️ Server Side                           │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │                   Netty Pipeline                       │    │
-│  │   Decoder │ ServerHandler │ Encoder │ Heartbeat     │    │
-│  └──────────────────────────┬──────────────────────────┘    │
-│                              │                                  │
-│  ┌──────────────────────────▼──────────────────────────┐    │
-│  │              Thread Pool (Bounded)                      │    │
-│  │   Core: 16  │  Max: 64  │  Queue: 1024             │    │
-│  │   CallerRunsPolicy (防丢弃)                            │    │
-│  └──────────────────────────┬──────────────────────────┘    │
-│                              │                                  │
-│  ┌──────────────────────────▼──────────────────────────┐    │
-│  │                   Business Service                      │    │
-│  │       DemoService / UserService / OrderService ...   │    │
-│  └───────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────────┘
+> 💡 **查看交互式版本**: [docs/architecture.html](docs/architecture.html)
 
-┌─────────────────────────┐    ┌─────────────────────────────────┐
-│   🦉 ZooKeeper Registry  │    │   📊 TraceCollector + Metrics    │
-│ ─────────────────────────│    │ ─────────────────────────────────│
-│  /snack/serviceDiscovery │    │  • QPS / Latency (P50/P90/P99) │
-│  registerService()       │    │  • Success Rate                 │
-│  queryForInstances()     │    │  • TraceId Propagation         │
-│  Health Check            │    │  • Real-time Dashboard         │
-└─────────────────────────┘    └─────────────────────────────────┘
-```
+### 核心组件
 
-### 核心技术
-
-| 组件 | 技术实现 |
-|------|----------|
-| **网络通信** | Netty4 NIO, ChannelPool, IdleStateHandler |
-| **序列化** | ProtoStuff 高效序列化 |
-| **协议** | 自定义 RPC 协议 (Magic/Version/TraceId/Body) |
-| **注册中心** | ZooKeeper + Curator |
-| **负载均衡** | RoundRobin, Random |
-| **熔断器** | CircuitBreaker (CLOSED/OPEN/HALF_OPEN) |
-| **限流** | Token Bucket 算法 |
-| **重试** | Exponential/Fixed/Fibonacci/Jitter Backoff |
-| **监控** | TraceCollector, Metrics API, Dashboard |
+| 层级 | 组件 | 说明 |
+|------|------|------|
+| **Client** | RpcFuture | 异步调用 / Callback |
+| | CircuitBreaker | CLOSED/OPEN/HALF_OPEN 三态熔断 |
+| | RateLimiter | Token Bucket 限流 |
+| | RetryPolicy | 指数/固定/斐波那契退避 |
+| **Network** | Netty ChannelPool | NIO 连接复用 |
+| **Server** | Thread Pool | Core:16, Max:64, Queue:1024 |
+| | HeartbeatHandler | IdleStateHandler 自动探活 |
+| **Registry** | ZooKeeper | 服务注册与发现 |
+| **Monitor** | TraceCollector | QPS/Latency/TraceId |
 
 ---
 
