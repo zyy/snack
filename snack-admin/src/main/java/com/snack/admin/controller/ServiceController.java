@@ -11,24 +11,56 @@ import java.util.Map;
 
 /**
  * Controller for service management pages.
- * Created by yangyang.zhao on 2017/8/10.
- * Updated: 2026/3/23 - Added enhanced service detail with metrics and circuit breaker support.
  */
 @Controller
 public class ServiceController {
+    
     @Autowired
     private ApplicationService applicationService;
 
+    // ====================
+    // Page Mappings
+    // ====================
+    
     @RequestMapping("/")
-    public String serviceList(Map<String, Object> model) {
-        model.put("instancesMap", this.applicationService.getServiceList());
-        return "service_list";
+    public String home() {
+        return "redirect:/dashboard";
     }
-
+    
+    @RequestMapping("/dashboard")
+    public String dashboard() {
+        return "dashboard";
+    }
+    
+    @RequestMapping("/services")
+    public String services() {
+        return "services";
+    }
+    
+    @RequestMapping("/circuit-breakers")
+    public String circuitBreakers() {
+        return "circuit_breakers";
+    }
+    
+    @RequestMapping("/system")
+    public String system() {
+        return "system";
+    }
+    
     @RequestMapping("/service/detail")
     public String serviceDetail(Map<String, Object> model, @RequestParam String serviceName) {
         model.put("serviceName", serviceName);
         model.put("serviceInstances", this.applicationService.getServiceInstances(serviceName));
         return "service_detail";
+    }
+    
+    // ====================
+    // Legacy Mappings
+    // ====================
+    
+    @RequestMapping("/service/list")
+    public String serviceList(Map<String, Object> model) {
+        model.put("instancesMap", this.applicationService.getServiceList());
+        return "service_list";
     }
 }

@@ -1,8 +1,10 @@
 package com.snack.admin.controller;
 
+import com.snack.admin.service.ApplicationService;
 import com.snack.rpc.trace.CircuitBreaker;
 import com.snack.rpc.trace.CircuitBreakerRegistry;
 import com.snack.rpc.trace.TraceCollector;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 
@@ -10,9 +12,6 @@ import java.util.*;
 
 /**
  * REST API Controller for Metrics, Circuit Breakers, and Health Checks.
- * Provides endpoints for the Admin Dashboard.
- * 
- * Created by yangyang.zhao on 2026/3/23.
  */
 @Controller
 @RequestMapping("/api")
@@ -20,6 +19,124 @@ public class MetricsController {
     
     private final TraceCollector tracer = TraceCollector.getInstance();
     private final CircuitBreakerRegistry circuitBreakerRegistry = CircuitBreakerRegistry.getInstance();
+    
+    @Autowired(required = false)
+    private ApplicationService applicationService;
+    
+    // ====================
+    // Services APIs
+    // ====================
+    
+    /**
+     * GET /api/services
+     * Get list of all registered services.
+     */
+    @RequestMapping(value = "/services", method = RequestMethod.GET)
+    @ResponseBody
+    public Map<String, Object> getServices() {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            List<Map<String, Object>> services = new ArrayList<>();
+            
+            // Get services from TraceCollector
+            Map<String, Map<String, Object>> metrics = tracer.getAllMetricsSummary();
+            for (String serviceName : metrics.keySet()) {
+                Map<String, Object> service = new HashMap<>();
+                service.put("name", serviceName);
+                service.put("type", "tracked");
+                
+                Map<String, Object> m = metrics.get(serviceName);
+                service.put("totalCalls", m.getOrDefault("totalCalls", 0));
+                service.put("successRate", m.getOrDefault("successRate", 0.0));
+                
+                // Get instance count from ZooKeeper
+                if (applicationService != null) {
+                    try {
+                        List instances = applicationService.getServiceInstances(serviceName);
+                        service.put("instances", instances != null ? instances.size() : 0);
+                        service.put("instanceList", instances);
+                    } catch (Exception e) {
+                        service.put("instances", 0);
+                    }
+                } else {
+                    service.put("instances", 1); // Default to 1
+                }
+                
+                services.add(service);
+            }
+            
+            // Also add services from circuit breakers that might not have metrics
+            List<Map<String, Object>> allBreakersStats = circuitBreakerRegistry.getAllStats();
+            for (Map<String, Object> cbStats : allBreakersStats) {
+                String cbName = (String) cbStats.get("name");
+                boolean found = false;
+                for (Map<String, Object> s : services) {
+                    if (s.get("name").equals(cbName)) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    Map<String, Object> service = new HashMap<>();
+                    service.put("name", cbName);
+                    service.put("type", "circuit-breaker-only");
+                    service.put("instances", 0);
+                    service.put("totalCalls", 0);
+                    service.put("successRate", 0.0);
+                    services.add(service);
+                }
+            }
+            
+            result.put("success", true);
+            result.put("data", services);
+            result.put("total", services.size());
+            result.put("timestamp", System.currentTimeMillis());
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("error", e.getMessage());
+        }
+        return result;
+    }
+    
+    /**
+     * GET /api/services/{serviceName}
+     * Get service details.
+     */
+    @RequestMapping(value = "/services/{serviceName}", method = RequestMethod.GET)
+    @ResponseBody
+    public Map<String, Object> getService(@PathVariable("serviceName") String serviceName) {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            Map<String, Object> service = new HashMap<>();
+            service.put("name", serviceName);
+            
+            // Get metrics
+            Map<String, Map<String, Object>> metrics = tracer.getAllMetricsSummary();
+            if (metrics.containsKey(serviceName)) {
+                service.put("metrics", metrics.get(serviceName));
+            }
+            
+            // Get circuit breaker
+            CircuitBreaker cb = circuitBreakerRegistry.get(serviceName);
+            if (cb != null) {
+                service.put("circuitBreaker", cb.getStats());
+            }
+            
+            // Get instances
+            if (applicationService != null) {
+                List instances = applicationService.getServiceInstances(serviceName);
+                service.put("instances", instances);
+            }
+            
+            result.put("success", true);
+            result.put("data", service);
+            result.put("timestamp", System.currentTimeMillis());
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("error", e.getMessage());
+        }
+        return result;
+    }
     
     // ====================
     // Metrics APIs
@@ -37,12 +154,18 @@ public class MetricsController {
             Map<String, Map<String, Object>> metrics = tracer.getAllMetricsSummary();
             Map<String, Double> qpsMap = tracer.getAllServiceQPS();
             
+            // Calculate totals
+            long totalCalls = 0, successCalls = 0, failureCalls = 0;
+            for (Map<String, Object> m : metrics.values()) {
+                totalCalls += ((Number) m.getOrDefault("totalCalls", 0)).longValue();
+                successCalls += ((Number) m.getOrDefault("successCalls", 0)).longValue();
+                failureCalls += ((Number) m.getOrDefault("failureCalls", 0)).longValue();
+            }
+            
             // Add QPS to each service
             for (Map.Entry<String, Map<String, Object>> entry : metrics.entrySet()) {
                 String serviceName = entry.getKey();
                 Map<String, Object> data = entry.getValue();
-                
-                // Calculate total QPS for all methods of this service
                 double totalQps = 0;
                 for (Map.Entry<String, Double> qpsEntry : qpsMap.entrySet()) {
                     if (qpsEntry.getKey().startsWith(serviceName + ":")) {
@@ -52,9 +175,15 @@ public class MetricsController {
                 data.put("qps", totalQps);
             }
             
+            double successRate = totalCalls > 0 ? (double) successCalls / totalCalls : 0.0;
+            
             result.put("success", true);
             result.put("data", metrics);
             result.put("globalQps", tracer.getGlobalQPS());
+            result.put("totalCalls", totalCalls);
+            result.put("successCalls", successCalls);
+            result.put("failureCalls", failureCalls);
+            result.put("successRate", successRate);
             result.put("timestamp", System.currentTimeMillis());
         } catch (Exception e) {
             result.put("success", false);
@@ -72,12 +201,11 @@ public class MetricsController {
     public Map<String, Object> getServiceMetrics(@PathVariable("name") String serviceName) {
         Map<String, Object> result = new HashMap<>();
         try {
-            // Get aggregated service metrics
-            Map<String, Object> serviceMetrics = tracer.getServiceMetrics(serviceName);
-            
-            // Get per-method metrics
             Map<String, TraceCollector.ServiceMetrics> allMetrics = tracer.getAllMetrics();
             Map<String, Map<String, Object>> methodMetrics = new HashMap<>();
+            
+            long totalCalls = 0, successCalls = 0, failureCalls = 0;
+            double totalLatency = 0, maxLatency = 0;
             
             for (Map.Entry<String, TraceCollector.ServiceMetrics> entry : allMetrics.entrySet()) {
                 if (entry.getKey().startsWith(serviceName + ":")) {
@@ -94,14 +222,27 @@ public class MetricsController {
                     methodData.put("p50", m.getP50());
                     methodData.put("p90", m.getP90());
                     methodData.put("p99", m.getP99());
-                    methodData.put("qps", tracer.getServiceQPS(serviceName, methodName));
                     methodMetrics.put(methodName, methodData);
+                    
+                    totalCalls += m.getTotalCalls();
+                    successCalls += m.getSuccessCalls();
+                    failureCalls += m.getFailureCalls();
+                    totalLatency += m.getAvgLatency() * m.getTotalCalls();
+                    maxLatency = Math.max(maxLatency, m.getMaxLatency());
                 }
             }
             
+            Map<String, Object> aggregated = new HashMap<>();
+            aggregated.put("totalCalls", totalCalls);
+            aggregated.put("successCalls", successCalls);
+            aggregated.put("failureCalls", failureCalls);
+            aggregated.put("successRate", totalCalls > 0 ? (double) successCalls / totalCalls : 0.0);
+            aggregated.put("avgLatency", totalCalls > 0 ? totalLatency / totalCalls : 0);
+            aggregated.put("maxLatency", maxLatency);
+            
             result.put("success", true);
             result.put("serviceName", serviceName);
-            result.put("aggregatedMetrics", serviceMetrics);
+            result.put("aggregatedMetrics", aggregated);
             result.put("methodMetrics", methodMetrics);
             result.put("timestamp", System.currentTimeMillis());
         } catch (Exception e) {
@@ -117,54 +258,30 @@ public class MetricsController {
     
     /**
      * GET /api/traces/recent
-     * Get recent call traces/span list.
+     * Get recent call traces.
      */
     @RequestMapping(value = "/traces/recent", method = RequestMethod.GET)
     @ResponseBody
-    public Map<String, Object> getRecentTraces(
-            @RequestParam(defaultValue = "50") int limit,
-            @RequestParam(required = false) String serviceName) {
+    public Map<String, Object> getRecentTraces(@RequestParam(defaultValue = "50") int limit) {
         Map<String, Object> result = new HashMap<>();
         try {
-            List<TraceCollector.Span> spans;
-            if (serviceName != null && !serviceName.isEmpty()) {
-                // Filter by service name
-                List<TraceCollector.Span> allSpans = tracer.getRecentSpans(limit * 10);
-                spans = new ArrayList<>();
-                for (TraceCollector.Span span : allSpans) {
-                    if (span.serviceName.equals(serviceName)) {
-                        spans.add(span);
-                        if (spans.size() >= limit) break;
-                    }
-                }
-            } else {
-                spans = tracer.getRecentSpans(limit);
+            List<TraceCollector.Span> spans = tracer.getRecentSpans(limit);
+            
+            List<Map<String, Object>> traceData = new ArrayList<>();
+            for (TraceCollector.Span span : spans) {
+                Map<String, Object> t = new HashMap<>();
+                t.put("traceId", span.traceId);
+                t.put("serviceName", span.serviceName);
+                t.put("method", span.methodName);
+                t.put("latency", span.durationMs);
+                t.put("success", span.success);
+                t.put("timestamp", span.startTime);
+                traceData.add(t);
             }
             
             result.put("success", true);
-            result.put("data", spans);
-            result.put("total", spans.size());
-            result.put("timestamp", System.currentTimeMillis());
-        } catch (Exception e) {
-            result.put("success", false);
-            result.put("error", e.getMessage());
-        }
-        return result;
-    }
-    
-    /**
-     * GET /api/traces/{traceId}
-     * Get a specific trace by traceId.
-     */
-    @RequestMapping(value = "/traces/{traceId}", method = RequestMethod.GET)
-    @ResponseBody
-    public Map<String, Object> getTrace(@PathVariable("traceId") String traceId) {
-        Map<String, Object> result = new HashMap<>();
-        try {
-            List<TraceCollector.Span> spans = tracer.getTrace(traceId);
-            result.put("success", true);
-            result.put("data", spans);
-            result.put("total", spans.size());
+            result.put("data", traceData);
+            result.put("total", traceData.size());
             result.put("timestamp", System.currentTimeMillis());
         } catch (Exception e) {
             result.put("success", false);
@@ -178,10 +295,10 @@ public class MetricsController {
     // ====================
     
     /**
-     * GET /api/circuitbreakers
-     * Get all circuit breaker states and configurations.
+     * GET /api/circuit-breakers
+     * Get all circuit breaker states.
      */
-    @RequestMapping(value = "/circuitbreakers", method = RequestMethod.GET)
+    @RequestMapping(value = "/circuit-breakers", method = RequestMethod.GET)
     @ResponseBody
     public Map<String, Object> getAllCircuitBreakers() {
         Map<String, Object> result = new HashMap<>();
@@ -202,77 +319,23 @@ public class MetricsController {
     }
     
     /**
-     * GET /api/circuitbreakers/{serviceName}
-     * Get circuit breaker state for a specific service.
+     * POST /api/circuit-breaker/{name}/reset
+     * Reset a circuit breaker.
      */
-    @RequestMapping(value = "/circuitbreakers/{serviceName}", method = RequestMethod.GET)
+    @RequestMapping(value = "/circuit-breaker/{name}/reset", method = RequestMethod.POST)
     @ResponseBody
-    public Map<String, Object> getCircuitBreaker(@PathVariable("serviceName") String serviceName) {
+    public Map<String, Object> resetCircuitBreaker(@PathVariable("name") String name) {
         Map<String, Object> result = new HashMap<>();
         try {
-            CircuitBreaker cb = circuitBreakerRegistry.get(serviceName);
+            CircuitBreaker cb = circuitBreakerRegistry.get(name);
             if (cb == null) {
                 result.put("success", false);
-                result.put("message", "Circuit breaker not found for " + serviceName);
+                result.put("message", "Circuit breaker not found: " + name);
                 return result;
             }
-            
-            result.put("success", true);
-            result.put("data", cb.getStats());
-            result.put("timestamp", System.currentTimeMillis());
-        } catch (Exception e) {
-            result.put("success", false);
-            result.put("error", e.getMessage());
-        }
-        return result;
-    }
-    
-    /**
-     * PUT /api/circuitbreakers/{serviceName}/config
-     * Update circuit breaker configuration.
-     */
-    @RequestMapping(value = "/circuitbreakers/{serviceName}/config", method = RequestMethod.PUT)
-    @ResponseBody
-    public Map<String, Object> updateCircuitBreakerConfig(
-            @PathVariable("serviceName") String serviceName,
-            @RequestParam(defaultValue = "5") int failureThreshold,
-            @RequestParam(defaultValue = "30000") long breakDurationMs,
-            @RequestParam(defaultValue = "3") int halfOpenMaxTrials) {
-        Map<String, Object> result = new HashMap<>();
-        try {
-            CircuitBreaker cb = circuitBreakerRegistry.updateConfig(
-                    serviceName, failureThreshold, breakDurationMs, halfOpenMaxTrials);
-            
-            result.put("success", true);
-            result.put("message", "Circuit breaker configuration updated for " + serviceName);
-            result.put("data", cb.getStats());
-            result.put("timestamp", System.currentTimeMillis());
-        } catch (Exception e) {
-            result.put("success", false);
-            result.put("error", e.getMessage());
-        }
-        return result;
-    }
-    
-    /**
-     * POST /api/circuitbreakers/{serviceName}/reset
-     * Reset circuit breaker to closed state.
-     */
-    @RequestMapping(value = "/circuitbreakers/{serviceName}/reset", method = RequestMethod.POST)
-    @ResponseBody
-    public Map<String, Object> resetCircuitBreaker(@PathVariable("serviceName") String serviceName) {
-        Map<String, Object> result = new HashMap<>();
-        try {
-            CircuitBreaker cb = circuitBreakerRegistry.get(serviceName);
-            if (cb == null) {
-                result.put("success", false);
-                result.put("message", "Circuit breaker not found for " + serviceName);
-                return result;
-            }
-            
             cb.reset();
             result.put("success", true);
-            result.put("message", "Circuit breaker reset for " + serviceName);
+            result.put("message", "Circuit breaker reset: " + name);
             result.put("data", cb.getStats());
             result.put("timestamp", System.currentTimeMillis());
         } catch (Exception e) {
@@ -283,17 +346,24 @@ public class MetricsController {
     }
     
     /**
-     * POST /api/circuitbreakers/reset-all
-     * Reset all circuit breakers.
+     * POST /api/circuit-breaker/{name}/config
+     * Configure a circuit breaker.
      */
-    @RequestMapping(value = "/circuitbreakers/reset-all", method = RequestMethod.POST)
+    @RequestMapping(value = "/circuit-breaker/{name}/config", method = RequestMethod.POST)
     @ResponseBody
-    public Map<String, Object> resetAllCircuitBreakers() {
+    public Map<String, Object> configCircuitBreaker(
+            @PathVariable("name") String name,
+            @RequestBody Map<String, Object> config) {
         Map<String, Object> result = new HashMap<>();
         try {
-            circuitBreakerRegistry.resetAll();
+            int failureThreshold = ((Number) config.getOrDefault("failureThreshold", 5)).intValue();
+            long recoveryTimeoutMs = ((Number) config.getOrDefault("recoveryTimeoutMs", 30000L)).longValue();
+            int halfOpenRequests = ((Number) config.getOrDefault("halfOpenRequests", 3)).intValue();
+            
+            CircuitBreaker cb = circuitBreakerRegistry.updateConfig(name, failureThreshold, recoveryTimeoutMs, halfOpenRequests);
             result.put("success", true);
-            result.put("message", "All circuit breakers have been reset");
+            result.put("message", "Configuration updated: " + name);
+            result.put("data", cb.getStats());
             result.put("timestamp", System.currentTimeMillis());
         } catch (Exception e) {
             result.put("success", false);
@@ -303,12 +373,12 @@ public class MetricsController {
     }
     
     // ====================
-    // Health Check APIs
+    // Health APIs
     // ====================
     
     /**
      * GET /api/health
-     * System health check endpoint.
+     * System health check.
      */
     @RequestMapping(value = "/health", method = RequestMethod.GET)
     @ResponseBody
@@ -319,7 +389,6 @@ public class MetricsController {
             health.put("status", "UP");
             health.put("timestamp", System.currentTimeMillis());
             
-            // Check components
             Map<String, Object> components = new HashMap<>();
             
             // Trace collector
@@ -336,7 +405,7 @@ public class MetricsController {
             cbHealth.put("stateCounts", circuitBreakerRegistry.getStateCounts());
             components.put("circuitBreakerRegistry", cbHealth);
             
-            // System info
+            // System
             Map<String, Object> system = new HashMap<>();
             Runtime runtime = Runtime.getRuntime();
             system.put("totalMemory", runtime.totalMemory());
@@ -347,7 +416,6 @@ public class MetricsController {
             components.put("system", system);
             
             health.put("components", components);
-            
             result.put("success", true);
             result.put("data", health);
         } catch (Exception e) {
@@ -358,39 +426,13 @@ public class MetricsController {
         return result;
     }
     
-    /**
-     * GET /api/health/liveness
-     * Kubernetes-style liveness probe.
-     */
-    @RequestMapping(value = "/health/liveness", method = RequestMethod.GET)
-    @ResponseBody
-    public Map<String, Object> liveness() {
-        Map<String, Object> result = new HashMap<>();
-        result.put("status", "UP");
-        result.put("timestamp", System.currentTimeMillis());
-        return result;
-    }
-    
-    /**
-     * GET /api/health/readiness
-     * Kubernetes-style readiness probe.
-     */
-    @RequestMapping(value = "/health/readiness", method = RequestMethod.GET)
-    @ResponseBody
-    public Map<String, Object> readiness() {
-        Map<String, Object> result = new HashMap<>();
-        result.put("status", "UP");
-        result.put("timestamp", System.currentTimeMillis());
-        return result;
-    }
-    
     // ====================
-    // Dashboard Data APIs
+    // Dashboard Summary
     // ====================
     
     /**
      * GET /api/dashboard/summary
-     * Get dashboard summary data for real-time monitoring.
+     * Dashboard summary data.
      */
     @RequestMapping(value = "/dashboard/summary", method = RequestMethod.GET)
     @ResponseBody
@@ -399,75 +441,25 @@ public class MetricsController {
         try {
             Map<String, Object> summary = new HashMap<>();
             
-            // Global QPS
             summary.put("globalQps", tracer.getGlobalQPS());
             
-            // Service metrics summary
             Map<String, Map<String, Object>> allMetrics = tracer.getAllMetricsSummary();
-            Map<String, Double> qpsMap = tracer.getAllServiceQPS();
-            
-            // Calculate global metrics
-            long totalCalls = 0, successCalls = 0, failureCalls = 0;
-            double avgLatency = 0;
-            for (Map<String, Object> metrics : allMetrics.values()) {
-                totalCalls += ((Number) metrics.get("totalCalls")).longValue();
-                successCalls += ((Number) metrics.get("successCalls")).longValue();
-                failureCalls += ((Number) metrics.get("failureCalls")).longValue();
-                avgLatency += ((Number) metrics.get("avgLatency")).doubleValue();
+            long totalCalls = 0, successCalls = 0;
+            for (Map<String, Object> m : allMetrics.values()) {
+                totalCalls += ((Number) m.getOrDefault("totalCalls", 0)).longValue();
+                successCalls += ((Number) m.getOrDefault("successCalls", 0)).longValue();
             }
-            avgLatency = allMetrics.isEmpty() ? 0 : avgLatency / allMetrics.size();
             
             summary.put("totalCalls", totalCalls);
             summary.put("successCalls", successCalls);
-            summary.put("failureCalls", failureCalls);
-            summary.put("successRate", totalCalls > 0 ? (double) successCalls / totalCalls * 100 : 0);
-            summary.put("avgLatency", avgLatency);
+            summary.put("failureCalls", totalCalls - successCalls);
+            summary.put("successRate", totalCalls > 0 ? (double) successCalls / totalCalls : 0.0);
             
-            // Circuit breaker summary
             summary.put("circuitBreakerStates", circuitBreakerRegistry.getStateCounts());
             summary.put("totalCircuitBreakers", circuitBreakerRegistry.size());
             
-            // Recent traces count
-            summary.put("recentSpanCount", tracer.getRecentSpans(0).size());
-            
-            // Top services by QPS
-            List<Map.Entry<String, Double>> sortedQps = new ArrayList<>(qpsMap.entrySet());
-            sortedQps.sort((a, b) -> Double.compare(b.getValue(), a.getValue()));
-            List<Map<String, Object>> topServices = new ArrayList<>();
-            for (int i = 0; i < Math.min(5, sortedQps.size()); i++) {
-                Map<String, Object> svc = new HashMap<>();
-                svc.put("service", sortedQps.get(i).getKey());
-                svc.put("qps", sortedQps.get(i).getValue());
-                topServices.add(svc);
-            }
-            summary.put("topServices", topServices);
-            
             result.put("success", true);
             result.put("data", summary);
-            result.put("timestamp", System.currentTimeMillis());
-        } catch (Exception e) {
-            result.put("success", false);
-            result.put("error", e.getMessage());
-        }
-        return result;
-    }
-    
-    // ====================
-    // Reset APIs
-    // ====================
-    
-    /**
-     * POST /api/reset
-     * Reset all tracing data.
-     */
-    @RequestMapping(value = "/reset", method = RequestMethod.POST)
-    @ResponseBody
-    public Map<String, Object> resetTracingData() {
-        Map<String, Object> result = new HashMap<>();
-        try {
-            tracer.reset();
-            result.put("success", true);
-            result.put("message", "All tracing data has been cleared");
             result.put("timestamp", System.currentTimeMillis());
         } catch (Exception e) {
             result.put("success", false);

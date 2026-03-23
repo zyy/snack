@@ -1,608 +1,410 @@
 <#assign base=request.contextPath />
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN" class="dark">
 <head>
     <base id="base" href="${base}">
-    <title>Snack RPC Admin - 实时监控</title>
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
-    <meta http-equiv="refresh" content="30">
-    <script src="/jquery/jquery-2.1.3.min.js"></script>
-    <link rel="stylesheet" type="text/css" href="${base}/webjars/bootstrap/3.3.7/css/bootstrap.min.css"/>
-    <script type="text/javascript" src="${base}/webjars/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+    <title>Snack RPC Admin - 专业监控面板</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <link rel="stylesheet" href="/css/webui.css"/>
     <style>
-        .dashboard-container {
-            padding: 20px;
-        }
-        .stat-card {
-            background: #fff;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .stat-card h3 {
-            margin-top: 0;
-            color: #666;
-            font-size: 14px;
-            font-weight: normal;
-        }
-        .stat-card .value {
-            font-size: 32px;
-            font-weight: bold;
-            color: #333;
-        }
-        .stat-card.success .value { color: #28a745; }
-        .stat-card.danger .value { color: #dc3545; }
-        .stat-card.warning .value { color: #ffc107; }
-        .stat-card.info .value { color: #17a2b8; }
-        
-        .chart-container {
-            background: #fff;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .chart-title {
-            font-size: 16px;
-            font-weight: bold;
-            margin-bottom: 15px;
-            color: #333;
-        }
-        
-        .circuit-breaker-panel {
-            background: #fff;
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 15px;
-            border-left: 4px solid #28a745;
-        }
-        .circuit-breaker-panel.open { border-left-color: #dc3545; }
-        .circuit-breaker-panel.half-open { border-left-color: #ffc107; }
-        
-        .cb-status {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: bold;
-        }
-        .cb-status.closed { background: #d4edda; color: #155724; }
-        .cb-status.open { background: #f8d7da; color: #721c24; }
-        .cb-status.half-open { background: #fff3cd; color: #856404; }
-        
-        .service-row:hover {
-            background-color: #f5f5f5;
-            cursor: pointer;
-        }
-        
-        .refresh-controls {
-            margin-bottom: 20px;
-        }
-        
-        .health-badge {
-            display: inline-block;
-            padding: 8px 16px;
-            border-radius: 4px;
-            font-size: 14px;
-            font-weight: bold;
-        }
-        .health-badge.up { background: #d4edda; color: #155724; }
-        .health-badge.down { background: #f8d7da; color: #721c24; }
-        
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: #666;
-        }
+        body { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); }
+        .glass { background: rgba(30, 41, 59, 0.8); backdrop-filter: blur(10px); }
+        .stat-card { transition: all 0.3s ease; }
+        .stat-card:hover { transform: translateY(-4px); box-shadow: 0 20px 40px rgba(0,0,0,0.3); }
+        .glow-green { box-shadow: 0 0 20px rgba(34, 197, 94, 0.4); }
+        .glow-red { box-shadow: 0 0 20px rgba(239, 68, 68, 0.4); }
+        .glow-yellow { box-shadow: 0 0 20px rgba(234, 179, 8, 0.4); }
+        .glow-blue { box-shadow: 0 0 20px rgba(59, 130, 246, 0.4); }
+        .glow-purple { box-shadow: 0 0 20px rgba(168, 85, 247, 0.4); }
+        .pulse-dot { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .float { animation: float 3s ease-in-out infinite; }
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
     </style>
 </head>
-<body>
-<div class="container-fluid dashboard-container">
-    <#assign page='dashboard'/>
-    <#include 'navbar.ftl'/>
-    
-    <div class="row">
-        <div class="col-md-12">
-            <h2>📊 实时监控面板</h2>
-            <div class="refresh-controls">
-                <button class="btn btn-primary" onclick="refreshDashboard()">
-                    <span class="glyphicon glyphicon-refresh"></span> 刷新数据
-                </button>
-                <label style="margin-left: 20px;">
-                    自动刷新:
-                    <select id="autoRefresh" class="form-control" style="display:inline;width:auto;" onchange="toggleAutoRefresh()">
-                        <option value="0">关闭</option>
-                        <option value="5">5秒</option>
-                        <option value="10" selected>10秒</option>
-                        <option value="30">30秒</option>
-                    </select>
-                </label>
-                <span id="lastUpdate" style="margin-left: 20px; color: #666;"></span>
+<body class="text-slate-100 min-h-screen">
+    <!-- Navigation -->
+    <nav class="glass border-b border-slate-700 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+                        <span class="text-xl">⚡</span>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold bg-gradient-to-r from-violet-400 to-purple-400 bg-clip-text text-transparent">Snack RPC Admin</h1>
+                        <p class="text-xs text-slate-400">分布式 RPC 监控平台</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-4">
+                    <a href="${base}/dashboard" class="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 transition-colors">监控面板</a>
+                    <a href="${base}/services" class="px-4 py-2 rounded-lg hover:bg-slate-700 transition-colors">服务列表</a>
+                    <a href="${base}/circuit-breakers" class="px-4 py-2 rounded-lg hover:bg-slate-700 transition-colors">熔断器</a>
+                    <a href="${base}/system" class="px-4 py-2 rounded-lg hover:bg-slate-700 transition-colors">系统</a>
+                </div>
             </div>
         </div>
-    </div>
-    
-    <!-- Stats Cards -->
-    <div class="row">
-        <div class="col-md-3">
-            <div class="stat-card info">
-                <h3>全局 QPS</h3>
-                <div class="value" id="globalQps">-</div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="mb-8">
+            <h2 class="text-3xl font-bold text-white mb-2">📊 实时监控面板</h2>
+            <p class="text-slate-400">实时监控 RPC 服务的健康状态、性能指标和调用统计</p>
+        </div>
+
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <!-- QPS Card -->
+            <div class="stat-card glass rounded-2xl p-6 border border-slate-700 glow-blue">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                        <span class="text-2xl">⚡</span>
+                    </div>
+                    <span class="text-xs text-blue-400 bg-blue-400/10 px-2 py-1 rounded-full">实时</span>
+                </div>
+                <h3 class="text-slate-400 text-sm mb-1">当前 QPS</h3>
+                <p id="qps-value" class="text-4xl font-bold text-blue-400">0</p>
+                <p class="text-xs text-slate-500 mt-1">每秒请求数</p>
+            </div>
+
+            <!-- Success Rate Card -->
+            <div class="stat-card glass rounded-2xl p-6 border border-slate-700 glow-green">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center">
+                        <span class="text-2xl">✅</span>
+                    </div>
+                    <span id="success-badge" class="text-xs text-green-400 bg-green-400/10 px-2 py-1 rounded-full">正常</span>
+                </div>
+                <h3 class="text-slate-400 text-sm mb-1">成功率</h3>
+                <p id="success-rate" class="text-4xl font-bold text-green-400">100%</p>
+                <p class="text-xs text-slate-500 mt-1">调用成功率</p>
+            </div>
+
+            <!-- Total Calls Card -->
+            <div class="stat-card glass rounded-2xl p-6 border border-slate-700 glow-purple">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center">
+                        <span class="text-2xl">📈</span>
+                    </div>
+                    <span class="text-xs text-purple-400 bg-purple-400/10 px-2 py-1 rounded-full">总计</span>
+                </div>
+                <h3 class="text-slate-400 text-sm mb-1">总调用量</h3>
+                <p id="total-calls" class="text-4xl font-bold text-purple-400">0</p>
+                <p class="text-xs text-slate-500 mt-1">历史累计</p>
+            </div>
+
+            <!-- Circuit Breaker Card -->
+            <div class="stat-card glass rounded-2xl p-6 border border-slate-700 glow-yellow">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="w-12 h-12 rounded-xl bg-yellow-500/20 flex items-center justify-center">
+                        <span class="text-2xl">🔴</span>
+                    </div>
+                    <span id="circuit-badge" class="text-xs text-yellow-400 bg-yellow-400/10 px-2 py-1 rounded-full">正常</span>
+                </div>
+                <h3 class="text-slate-400 text-sm mb-1">熔断器状态</h3>
+                <p id="circuit-state" class="text-2xl font-bold text-yellow-400">CLOSED</p>
+                <p class="text-xs text-slate-500 mt-1">所有熔断器正常</p>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="stat-card">
-                <h3>总调用次数</h3>
-                <div class="value" id="totalCalls">-</div>
+
+        <!-- Charts Row -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <!-- QPS Trend Chart -->
+            <div class="glass rounded-2xl p-6 border border-slate-700">
+                <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-blue-400 pulse-dot"></span>
+                    QPS 趋势
+                </h3>
+                <div id="qps-chart" class="w-full h-64"></div>
+            </div>
+
+            <!-- Latency Chart -->
+            <div class="glass rounded-2xl p-6 border border-slate-700">
+                <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-green-400 pulse-dot"></span>
+                    响应时间 (ms)
+                </h3>
+                <div id="latency-chart" class="w-full h-64"></div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="stat-card success">
-                <h3>成功率</h3>
-                <div class="value" id="successRate">-</div>
+
+        <!-- Services and Circuits Row -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <!-- Service List -->
+            <div class="glass rounded-2xl p-6 border border-slate-700">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-white flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-violet-400 pulse-dot"></span>
+                        注册服务
+                    </h3>
+                    <button onclick="refreshServices()" class="px-3 py-1 text-sm bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors">刷新</button>
+                </div>
+                <div id="service-list" class="space-y-3 max-h-80 overflow-y-auto">
+                    <div class="text-center text-slate-500 py-8">加载中...</div>
+                </div>
+            </div>
+
+            <!-- Circuit Breakers -->
+            <div class="glass rounded-2xl p-6 border border-slate-700">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-white flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-yellow-400 pulse-dot"></span>
+                        熔断器状态
+                    </h3>
+                    <a href="${base}/circuit-breakers" class="px-3 py-1 text-sm bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors">管理</a>
+                </div>
+                <div id="circuit-list" class="space-y-3 max-h-80 overflow-y-auto">
+                    <div class="text-center text-slate-500 py-8">加载中...</div>
+                </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="stat-card warning">
-                <h3>平均延迟</h3>
-                <div class="value" id="avgLatency">-</div>
+
+        <!-- Recent Traces -->
+        <div class="glass rounded-2xl p-6 border border-slate-700">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-white flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 pulse-dot"></span>
+                    最近调用链路
+                </h3>
+                <button onclick="loadTraces()" class="px-3 py-1 text-sm bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors">刷新</button>
             </div>
-        </div>
-    </div>
-    
-    <!-- Charts Row -->
-    <div class="row">
-        <div class="col-md-8">
-            <div class="chart-container">
-                <div class="chart-title">📈 QPS 趋势 (最近60秒)</div>
-                <div id="qpsChart" style="width: 100%; height: 300px;"></div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="chart-container">
-                <div class="chart-title">🔄 熔断器状态分布</div>
-                <div id="cbStateChart" style="width: 100%; height: 300px;"></div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Latency Chart and Service Table -->
-    <div class="row">
-        <div class="col-md-6">
-            <div class="chart-container">
-                <div class="chart-title">⏱️ 响应时间分布 (ms)</div>
-                <div id="latencyChart" style="width: 100%; height: 300px;"></div>
-            </div>
-        </div>
-        <div class="col-md-6">
-            <div class="chart-container">
-                <div class="chart-title">🏆 Top 5 服务 (按 QPS)</div>
-                <div id="topServicesChart" style="width: 100%; height: 300px;"></div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Service Metrics Table -->
-    <div class="row">
-        <div class="col-md-12">
-            <div class="chart-container">
-                <div class="chart-title">📋 服务指标详情</div>
-                <table class="table table-striped table-hover">
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
                     <thead>
-                        <tr>
-                            <th>服务名称</th>
-                            <th>QPS</th>
-                            <th>总调用</th>
-                            <th>成功</th>
-                            <th>失败</th>
-                            <th>成功率</th>
-                            <th>Avg(ms)</th>
-                            <th>P50(ms)</th>
-                            <th>P90(ms)</th>
-                            <th>P99(ms)</th>
-                            <th>熔断器状态</th>
-                            <th>操作</th>
+                        <tr class="text-slate-400 border-b border-slate-700">
+                            <th class="text-left py-3 px-4">TraceId</th>
+                            <th class="text-left py-3 px-4">服务</th>
+                            <th class="text-left py-3 px-4">方法</th>
+                            <th class="text-left py-3 px-4">延迟</th>
+                            <th class="text-left py-3 px-4">状态</th>
+                            <th class="text-left py-3 px-4">时间</th>
                         </tr>
                     </thead>
-                    <tbody id="serviceTable">
-                        <tr>
-                            <td colspan="12" class="loading">加载中...</td>
+                    <tbody id="trace-table" class="text-slate-300">
+                        <tr class="border-b border-slate-700/50">
+                            <td colspan="6" class="text-center py-8 text-slate-500">加载中...</td>
                         </tr>
                     </tbody>
                 </table>
             </div>
         </div>
     </div>
-    
-    <!-- Circuit Breaker Management -->
-    <div class="row">
-        <div class="col-md-6">
-            <div class="chart-container">
-                <div class="chart-title">⚡ 熔断器详情</div>
-                <div id="circuitBreakerList">
-                    <div class="loading">加载中...</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-6">
-            <div class="chart-container">
-                <div class="chart-title">💓 系统健康状态</div>
-                <div id="healthStatus">
-                    <div class="loading">加载中...</div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
 
-<script>
-    // Chart instances
-    let qpsChart, latencyChart, topServicesChart, cbStateChart;
-    let autoRefreshInterval = null;
-    let qpsHistory = [];
-    
-    // Initialize charts
-    $(document).ready(function() {
-        initCharts();
-        refreshDashboard();
-    });
-    
-    function initCharts() {
-        // QPS Chart
-        qpsChart = echarts.init(document.getElementById('qpsChart'));
-        qpsChart.setOption({
-            tooltip: { trigger: 'axis' },
-            xAxis: {
-                type: 'category',
-                data: [],
-                axisLabel: { rotate: 45 }
-            },
-            yAxis: { type: 'value', name: 'QPS' },
-            series: [{ name: 'QPS', type: 'line', smooth: true, data: [] }]
-        });
-        
-        // Latency Chart
-        latencyChart = echarts.init(document.getElementById('latencyChart'));
-        latencyChart.setOption({
-            tooltip: { trigger: 'axis' },
-            legend: { data: ['P50', 'P90', 'P99'] },
-            xAxis: { type: 'category', data: [] },
-            yAxis: { type: 'value', name: 'ms' },
+    <!-- Footer -->
+    <footer class="glass border-t border-slate-700 mt-8 py-6">
+        <div class="max-w-7xl mx-auto px-4 text-center text-slate-500 text-sm">
+            <p>Snack RPC Admin · 实时监控平台 · <span id="current-time"></span></p>
+        </div>
+    </footer>
+
+    <script>
+        // Initialize Charts
+        const qpsChart = echarts.init(document.getElementById('qps-chart'));
+        const latencyChart = echarts.init(document.getElementById('latency-chart'));
+
+        const qpsOption = {
+            backgroundColor: 'transparent',
+            tooltip: { trigger: 'axis', backgroundColor: '#1e293b', borderColor: '#475569' },
+            legend: { data: ['QPS'], textStyle: { color: '#94a3b8' } },
+            xAxis: { type: 'time', axisLine: { lineStyle: { color: '#334155' } }, axisLabel: { color: '#94a3b8' }, splitLine: { show: false } },
+            yAxis: { type: 'value', axisLine: { lineStyle: { color: '#334155' } }, axisLabel: { color: '#94a3b8' }, splitLine: { lineStyle: { color: '#1e293b' } } },
+            series: [{ name: 'QPS', type: 'line', smooth: true, areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(59, 130, 246, 0.3)' }, { offset: 1, color: 'rgba(59, 130, 246, 0)' }] } }, lineStyle: { color: '#3b82f6', width: 2 }, itemStyle: { color: '#3b82f6' }, data: [] }]
+        };
+
+        const latencyOption = {
+            backgroundColor: 'transparent',
+            tooltip: { trigger: 'axis', backgroundColor: '#1e293b', borderColor: '#475569' },
+            legend: { data: ['P50', 'P90', 'P99'], textStyle: { color: '#94a3b8' } },
+            xAxis: { type: 'time', axisLine: { lineStyle: { color: '#334155' } }, axisLabel: { color: '#94a3b8' }, splitLine: { show: false } },
+            yAxis: { type: 'value', axisLine: { lineStyle: { color: '#334155' } }, axisLabel: { color: '#94a3b8' }, splitLine: { lineStyle: { color: '#1e293b' } } },
             series: [
-                { name: 'P50', type: 'bar', data: [] },
-                { name: 'P90', type: 'bar', data: [] },
-                { name: 'P99', type: 'bar', data: [] }
+                { name: 'P50', type: 'line', smooth: true, lineStyle: { color: '#22c55e', width: 2 }, data: [] },
+                { name: 'P90', type: 'line', smooth: true, lineStyle: { color: '#f59e0b', width: 2 }, data: [] },
+                { name: 'P99', type: 'line', smooth: true, lineStyle: { color: '#ef4444', width: 2 }, data: [] }
             ]
-        });
-        
-        // Top Services Chart
-        topServicesChart = echarts.init(document.getElementById('topServicesChart'));
-        topServicesChart.setOption({
-            tooltip: { trigger: 'item' },
-            series: [{
-                name: 'QPS',
-                type: 'pie',
-                radius: ['40%', '70%'],
-                data: []
-            }]
-        });
-        
-        // Circuit Breaker State Chart
-        cbStateChart = echarts.init(document.getElementById('cbStateChart'));
-        cbStateChart.setOption({
-            tooltip: { trigger: 'item' },
-            series: [{
-                name: '状态',
-                type: 'pie',
-                radius: '60%',
-                data: [
-                    { value: 0, name: 'CLOSED' },
-                    { value: 0, name: 'OPEN' },
-                    { value: 0, name: 'HALF_OPEN' }
-                ]
-            }]
-        });
-        
-        // Handle window resize
-        window.addEventListener('resize', function() {
-            qpsChart.resize();
-            latencyChart.resize();
-            topServicesChart.resize();
-            cbStateChart.resize();
-        });
-    }
-    
-    function toggleAutoRefresh() {
-        const interval = parseInt($('#autoRefresh').val());
-        if (autoRefreshInterval) {
-            clearInterval(autoRefreshInterval);
-            autoRefreshInterval = null;
-        }
-        if (interval > 0) {
-            autoRefreshInterval = setInterval(refreshDashboard, interval * 1000);
-        }
-    }
-    
-    function refreshDashboard() {
-        refreshStats();
-        refreshCircuitBreakers();
-        refreshHealth();
-    }
-    
-    function refreshStats() {
-        $.get('/api/metrics/all', function(response) {
-            if (response.success) {
-                const data = response.data;
+        };
+
+        qpsChart.setOption(qpsOption);
+        latencyChart.setOption(latencyOption);
+
+        // Data storage
+        let qpsHistory = [];
+        let latencyHistory = { p50: [], p90: [], p99: [] };
+
+        // Load data
+        async function loadMetrics() {
+            try {
+                const resp = await fetch('/api/metrics/all');
+                const data = await resp.json();
                 
-                // Update stats cards
-                $('#globalQps').text(response.globalQps ? response.globalQps.toFixed(2) : '0');
-                
-                let totalCalls = 0, successCalls = 0, failureCalls = 0;
-                let totalLatency = 0, count = 0;
-                let p50Sum = 0, p90Sum = 0, p99Sum = 0;
-                
-                // Service table
-                let tableHtml = '';
-                const services = [];
-                
-                for (const [serviceName, metrics] of Object.entries(data)) {
-                    totalCalls += metrics.totalCalls || 0;
-                    successCalls += metrics.successCalls || 0;
-                    failureCalls += metrics.failureCalls || 0;
-                    totalLatency += metrics.avgLatency || 0;
-                    count++;
+                if (data.success) {
+                    document.getElementById('qps-value').textContent = data.globalQps.toFixed(1);
+                    document.getElementById('success-rate').textContent = (data.successRate * 100).toFixed(1) + '%';
+                    document.getElementById('total-calls').textContent = formatNumber(data.totalCalls);
                     
-                    const successRate = metrics.totalCalls > 0 
-                        ? (metrics.successCalls / metrics.totalCalls * 100).toFixed(1) 
-                        : '0.0';
+                    // Update QPS history
+                    const now = new Date();
+                    qpsHistory.push([now.getTime(), data.globalQps]);
+                    if (qpsHistory.length > 30) qpsHistory.shift();
+                    qpsChart.setOption({ series: [{ data: qpsHistory }] });
                     
-                    services.push({
-                        name: serviceName,
-                        qps: metrics.qps || 0,
-                        totalCalls: metrics.totalCalls,
-                        successCalls: metrics.successCalls,
-                        failureCalls: metrics.failureCalls,
-                        successRate: successRate,
-                        avgLatency: (metrics.avgLatency || 0).toFixed(1),
-                        p50: (metrics.p50 || 0).toFixed(1),
-                        p90: (metrics.p90 || 0).toFixed(1),
-                        p99: (metrics.p99 || 0).toFixed(1)
-                    });
-                    
-                    p50Sum += metrics.p50 || 0;
-                    p90Sum += metrics.p90 || 0;
-                    p99Sum += metrics.p99 || 0;
+                    // Update latency history
+                    if (data.avgLatency) {
+                        latencyHistory.p50.push([now.getTime(), data.avgLatency]);
+                        latencyHistory.p90.push([now.getTime(), data.p90Latency || data.avgLatency * 1.5]);
+                        latencyHistory.p99.push([now.getTime(), data.p99Latency || data.avgLatency * 2]);
+                        if (latencyHistory.p50.length > 30) {
+                            latencyHistory.p50.shift();
+                            latencyHistory.p90.shift();
+                            latencyHistory.p99.shift();
+                        }
+                        latencyChart.setOption({ series: [
+                            { name: 'P50', data: latencyHistory.p50 },
+                            { name: 'P90', data: latencyHistory.p90 },
+                            { name: 'P99', data: latencyHistory.p99 }
+                        ]});
+                    }
                 }
-                
-                // Sort by QPS
-                services.sort((a, b) => b.qps - a.qps);
-                
-                const avgLatency = count > 0 ? (totalLatency / count).toFixed(1) : '0.0';
-                const successRate = totalCalls > 0 ? (successCalls / totalCalls * 100).toFixed(1) : '0.0';
-                
-                $('#totalCalls').text(totalCalls.toLocaleString());
-                $('#successRate').text(successRate + '%');
-                $('#avgLatency').text(avgLatency);
-                
-                // Update service table
-                if (services.length == 0) {
-                    tableHtml = '<tr><td colspan="12" class="text-center text-muted">暂无数据</td></tr>';
-                } else {
-                    services.forEach(function(svc) {
-                        const cbStatus = getCircuitBreakerStatus(svc.name);
-                        const rateClass = parseFloat(svc.successRate) >= 95 ? 'success' : 
-                                         parseFloat(svc.successRate) >= 80 ? 'warning' : 'danger';
-                        tableHtml += `
-                            <tr class="service-row">
-                                <td><strong>${svc.name}</strong></td>
-                                <td>${svc.qps.toFixed(2)}</td>
-                                <td>${svc.totalCalls.toLocaleString()}</td>
-                                <td class="text-success">${svc.successCalls.toLocaleString()}</td>
-                                <td class="text-danger">${svc.failureCalls.toLocaleString()}</td>
-                                <td class="text-${rateClass}">${svc.successRate}%</td>
-                                <td>${svc.avgLatency}</td>
-                                <td>${svc.p50}</td>
-                                <td>${svc.p90}</td>
-                                <td>${svc.p99}</td>
-                                <td>${cbStatus}</td>
-                                <td>
-                                    <a href="/service/detail?serviceName=${encodeURIComponent(svc.name)}" class="btn btn-xs btn-info">详情</a>
-                                    <button class="btn btn-xs btn-warning" onclick="resetCircuitBreaker('${svc.name}')">重置熔断器</button>
-                                </td>
-                            </tr>
-                        `;
-                    });
-                }
-                $('#serviceTable').html(tableHtml);
-                
-                // Update QPS history
-                const now = new Date().toLocaleTimeString();
-                qpsHistory.push({ time: now, value: response.globalQps || 0 });
-                if (qpsHistory.length > 20) qpsHistory.shift();
-                
-                qpsChart.setOption({
-                    xAxis: { data: qpsHistory.map(h => h.time) },
-                    series: [{ data: qpsHistory.map(h => h.value.toFixed(2)) }]
-                });
-                
-                // Update latency chart (show top 5 services)
-                const top5 = services.slice(0, 5);
-                latencyChart.setOption({
-                    xAxis: { data: top5.map(s => s.name) },
-                    series: [
-                        { name: 'P50', data: top5.map(s => s.p50) },
-                        { name: 'P90', data: top5.map(s => s.p90) },
-                        { name: 'P99', data: top5.map(s => s.p99) }
-                    ]
-                });
-                
-                // Update top services chart
-                topServicesChart.setOption({
-                    series: [{
-                        data: top5.map(s => ({ name: s.name, value: s.qps.toFixed(2) }))
-                    }]
-                });
-                
-                $('#lastUpdate').text('最后更新: ' + new Date().toLocaleTimeString());
+            } catch (e) {
+                console.error('Failed to load metrics:', e);
             }
-        });
-        
-        // Also fetch circuit breaker states for the table
-        $.get('/api/circuitbreakers', function(response) {
-            if (response.success) {
-                updateCircuitBreakerChart(response.stateCounts);
-            }
-        });
-    }
-    
-    function refreshCircuitBreakers() {
-        $.get('/api/circuitbreakers', function(response) {
-            if (response.success && response.data) {
-                let html = '';
-                response.data.forEach(function(cb) {
-                    const stateClass = cb.state.toLowerCase();
-                    html += `
-                        <div class="circuit-breaker-panel ${stateClass}">
-                            <h4>
-                                <strong>${cb.name}</strong>
-                                <span class="cb-status ${stateClass}">${cb.state}</span>
-                            </h4>
-                            <div class="row">
-                                <div class="col-md-3">
-                                    <small>失败阈值: ${cb.failureThreshold}</small>
+        }
+
+        async function loadServices() {
+            try {
+                const resp = await fetch('/api/services');
+                const data = await resp.json();
+                const container = document.getElementById('service-list');
+                
+                if (data.success && data.data && data.data.length > 0) {
+                    container.innerHTML = data.data.map(s => `
+                        <div class="bg-slate-800/50 rounded-xl p-4 border border-slate-700 hover:border-violet-500/50 transition-colors">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <h4 class="font-semibold text-white">${s.name}</h4>
+                                    <p class="text-xs text-slate-400">${s.instances || 0} 实例</p>
                                 </div>
-                                <div class="col-md-3">
-                                    <small>熔断时长: ${cb.breakDurationMs}ms</small>
-                                </div>
-                                <div class="col-md-3">
-                                    <small>半开试探: ${cb.halfOpenMaxTrials}</small>
-                                </div>
-                                <div class="col-md-3">
-                                    <small>当前失败: ${cb.currentFailureCount}/${cb.failureThreshold}</small>
-                                </div>
-                            </div>
-                            <div class="row" style="margin-top:10px;">
-                                <div class="col-md-3">
-                                    <small>总请求: ${cb.totalRequests}</small>
-                                </div>
-                                <div class="col-md-3">
-                                    <small>成功: ${cb.successfulRequests}</small>
-                                </div>
-                                <div class="col-md-3">
-                                    <small>失败: ${cb.failedRequests}</small>
-                                </div>
-                                <div class="col-md-3">
-                                    <small>阻止: ${cb.blockedRequests}</small>
-                                </div>
-                            </div>
-                            <#if cb.state == 'OPEN'><div class="text-danger" style="margin-top:10px;">等待恢复: ${((cb.timeUntilRetry?number)?round / 1000)?c}秒</div></#if>
-                            <div style="margin-top:10px;">
-                                <button class="btn btn-xs btn-primary" onclick="resetCircuitBreaker('${cb.name}')">重置</button>
-                                <button class="btn btn-xs btn-danger" onclick="forceOpenCircuitBreaker('${cb.name}')">强制开启</button>
+                                <span class="w-3 h-3 rounded-full bg-green-400 pulse-dot"></span>
                             </div>
                         </div>
-                    `;
-                });
-                if (html == '') {
-                    html = '<div class="text-muted">暂无熔断器数据</div>';
-                }
-                $('#circuitBreakerList').html(html);
-            }
-        });
-    }
-    
-    function refreshHealth() {
-        $.get('/api/health', function(response) {
-            if (response.success) {
-                const health = response.data;
-                let html = `
-                    <div class="health-badge <#if health.status == 'UP'>up<#else>down</#if>">
-                        <#if health.status == 'UP'>✅ 系统正常<#else>❌ 系统异常</#if>
-                    </div>
-                    <table class="table table-condensed" style="margin-top:15px;">
-                        <tr>
-                            <td>组件</td>
-                            <td>状态</td>
-                            <td>详情</td>
-                        </tr>
-                `;
-                
-                for (const [name, component] of Object.entries(health.components)) {
-                    const statusClass = component.status == 'UP' ? 'success' : 'danger';
-                    let details = '';
-                    if (name == 'traceCollector') {
-                        details = `span数量: ${component.recentSpanCount}`;
-                    } else if (name == 'circuitBreakerRegistry') {
-                        const counts = component.stateCounts;
-                        details = `CLOSED: ${counts.CLOSED}, OPEN: ${counts.OPEN}, HALF_OPEN: ${counts.HALF_OPEN}`;
-                    } else if (name == 'system') {
-                        const used = ((component.usedMemory / component.maxMemory) * 100).toFixed(1);
-                        details = `内存: ${used}% (${(component.usedMemory / 1024 / 1024).toFixed(0)}MB)`;
-                    }
-                    html += `
-                        <tr>
-                            <td>${name}</td>
-                            <td><span class="label label-${statusClass}">${component.status}</span></td>
-                            <td><small>${details}</small></td>
-                        </tr>
-                    `;
-                }
-                html += '</table>';
-                $('#healthStatus').html(html);
-            }
-        });
-    }
-    
-    function updateCircuitBreakerChart(stateCounts) {
-        cbStateChart.setOption({
-            series: [{
-                data: [
-                    { value: stateCounts.CLOSED || 0, name: 'CLOSED' },
-                    { value: stateCounts.OPEN || 0, name: 'OPEN' },
-                    { value: stateCounts.HALF_OPEN || 0, name: 'HALF_OPEN' }
-                ]
-            }]
-        });
-    }
-    
-    function getCircuitBreakerStatus(serviceName) {
-        // This will be populated after refreshCircuitBreakers
-        return '<span class="cb-status closed">-</span>';
-    }
-    
-    function resetCircuitBreaker(serviceName) {
-        if (confirm('确定要重置 ' + serviceName + ' 的熔断器吗?')) {
-            $.post('/api/circuitbreakers/' + encodeURIComponent(serviceName) + '/reset', function(response) {
-                if (response.success) {
-                    alert('熔断器已重置');
-                    refreshCircuitBreakers();
+                    `).join('');
                 } else {
-                    alert('重置失败: ' + response.message);
+                    container.innerHTML = '<div class="text-center text-slate-500 py-8">暂无注册服务</div>';
                 }
-            });
+            } catch (e) {
+                document.getElementById('service-list').innerHTML = '<div class="text-center text-red-400 py-8">加载失败</div>';
+            }
         }
-    }
-    
-    function forceOpenCircuitBreaker(serviceName) {
-        if (confirm('确定要强制开启 ' + serviceName + ' 的熔断器吗?')) {
-            $.ajax({
-                url: '/api/circuitbreakers/' + encodeURIComponent(serviceName) + '/config',
-                type: 'PUT',
-                data: { failureThreshold: 1, breakDurationMs: 60000, halfOpenMaxTrials: 1 },
-                success: function(response) {
-                    if (response.success) {
-                        alert('熔断器已强制开启');
-                        refreshCircuitBreakers();
-                    } else {
-                        alert('操作失败');
+
+        async function loadCircuitBreakers() {
+            try {
+                const resp = await fetch('/api/circuit-breakers');
+                const data = await resp.json();
+                const container = document.getElementById('circuit-list');
+                
+                if (data.success && data.data && data.data.length > 0) {
+                    container.innerHTML = data.data.map(cb => {
+                        const stateClass = cb.state === 'CLOSED' ? 'text-green-400' : cb.state === 'OPEN' ? 'text-red-400' : 'text-yellow-400';
+                        const glowClass = cb.state === 'CLOSED' ? 'glow-green' : cb.state === 'OPEN' ? 'glow-red' : 'glow-yellow';
+                        return `
+                            <div class="bg-slate-800/50 rounded-xl p-4 border border-slate-700 ${glowClass}">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="font-semibold text-white">${cb.name}</span>
+                                    <span class="px-2 py-1 rounded text-xs font-bold ${stateClass} bg-slate-900/50">${cb.state}</span>
+                                </div>
+                                <div class="grid grid-cols-3 gap-2 text-xs text-slate-400">
+                                    <div>失败: ${cb.failedRequests || 0}</div>
+                                    <div>成功: ${cb.successfulRequests || 0}</div>
+                                    <div>阻止: ${cb.blockedRequests || 0}</div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                    
+                    // Update summary
+                    const openCount = data.data.filter(cb => cb.state === 'OPEN').length;
+                    const circuitBadge = document.getElementById('circuit-badge');
+                    const circuitState = document.getElementById('circuit-state');
+                    if (openCount > 0) {
+                        circuitBadge.textContent = '有熔断';
+                        circuitBadge.className = 'text-xs text-red-400 bg-red-400/10 px-2 py-1 rounded-full';
+                        circuitState.textContent = 'OPEN';
+                        circuitState.className = 'text-2xl font-bold text-red-400';
                     }
+                } else {
+                    container.innerHTML = '<div class="text-center text-slate-500 py-8">暂无熔断器数据</div>';
                 }
-            });
+            } catch (e) {
+                document.getElementById('circuit-list').innerHTML = '<div class="text-center text-red-400 py-8">加载失败</div>';
+            }
         }
-    }
-</script>
+
+        async function loadTraces() {
+            try {
+                const resp = await fetch('/api/traces/recent?limit=10');
+                const data = await resp.json();
+                const tbody = document.getElementById('trace-table');
+                
+                if (data.success && data.data && data.data.length > 0) {
+                    tbody.innerHTML = data.data.map(t => `
+                        <tr class="border-b border-slate-700/50 hover:bg-slate-800/50">
+                            <td class="py-3 px-4 font-mono text-xs">${t.traceId ? t.traceId.substring(0, 8) + '...' : 'N/A'}</td>
+                            <td class="py-3 px-4">${t.serviceName || 'Unknown'}</td>
+                            <td class="py-3 px-4">${t.method || 'Unknown'}</td>
+                            <td class="py-3 px-4">${(t.latency || 0).toFixed(2)} ms</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-1 rounded text-xs ${t.success ? 'bg-green-400/20 text-green-400' : 'bg-red-400/20 text-red-400'}">
+                                    ${t.success ? '成功' : '失败'}
+                                </span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-500">${t.timestamp ? new Date(t.timestamp).toLocaleTimeString() : 'N/A'}</td>
+                        </tr>
+                    `).join('');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-slate-500">暂无调用记录</td></tr>';
+                }
+            } catch (e) {
+                document.getElementById('trace-table').innerHTML = '<tr><td colspan="6" class="text-center py-8 text-red-400">加载失败</td></tr>';
+            }
+        }
+
+        function refreshServices() {
+            loadServices();
+        }
+
+        function formatNumber(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+            return num.toString();
+        }
+
+        function updateTime() {
+            document.getElementById('current-time').textContent = new Date().toLocaleString();
+        }
+
+        // Initial load
+        loadMetrics();
+        loadServices();
+        loadCircuitBreakers();
+        loadTraces();
+        updateTime();
+
+        // Auto refresh
+        setInterval(loadMetrics, 3000);
+        setInterval(loadServices, 10000);
+        setInterval(loadCircuitBreakers, 5000);
+        setInterval(loadTraces, 15000);
+        setInterval(updateTime, 1000);
+
+        // Resize charts on window resize
+        window.addEventListener('resize', () => {
+            qpsChart.resize();
+            latencyChart.resize();
+        });
+    </script>
 </body>
 </html>
