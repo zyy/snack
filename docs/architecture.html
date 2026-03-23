@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snack RPC Framework Architecture</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/typography@0.5.0/pro/style.min.css"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: '#0f0f23',
+                        card: '#1a1a3e',
+                        accent1: '#667eea',
+                        accent2: '#764ba2',
+                        accent3: '#11998e',
+                        accent4: '#38ef7d',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a3e 50%, #0f0f23 100%);
+            min-height: 100vh;
+        }
+        
+        .glass {
+            background: rgba(26, 26, 62, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(102, 126, 234, 0.3);
+        }
+        
+        .card {
+            background: linear-gradient(145deg, #1a1a3e 0%, #2d2d5a 100%);
+            border: 1px solid rgba(102, 126, 234, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(102, 126, 234, 0.2);
+            border-color: rgba(102, 126, 234, 0.5);
+        }
+        
+        .gradient-text {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .glow-purple {
+            box-shadow: 0 0 30px rgba(102, 126, 234, 0.4);
+        }
+        
+        .glow-green {
+            box-shadow: 0 0 30px rgba(17, 153, 142, 0.4);
+        }
+        
+        .glow-blue {
+            box-shadow: 0 0 30px rgba(79, 172, 254, 0.4);
+        }
+        
+        .glow-pink {
+            box-shadow: 0 0 30px rgba(250, 112, 154, 0.4);
+        }
+        
+        .arrow {
+            position: relative;
+        }
+        
+        .arrow::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            right: -20px;
+            transform: translateY(-50%);
+            border: 6px solid transparent;
+            border-left-color: #667eea;
+        }
+        
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .float {
+            animation: float 3s ease-in-out infinite;
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .badge-purple {
+            background: rgba(102, 126, 234, 0.2);
+            color: #667eea;
+            border: 1px solid rgba(102, 126, 234, 0.3);
+        }
+        
+        .badge-green {
+            background: rgba(17, 153, 142, 0.2);
+            color: #38ef7d;
+            border: 1px solid rgba(17, 153, 142, 0.3);
+        }
+        
+        .badge-pink {
+            background: rgba(250, 112, 154, 0.2);
+            color: #fa709a;
+            border: 1px solid rgba(250, 112, 154, 0.3);
+        }
+        
+        .badge-blue {
+            background: rgba(79, 172, 254, 0.2);
+            color: #4facfe;
+            border: 1px solid rgba(79, 172, 254, 0.3);
+        }
+        
+        .grid-bg {
+            background-image: 
+                linear-gradient(rgba(102, 126, 234, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(102, 126, 234, 0.05) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+    </style>
+</head>
+<body class="grid-bg text-white overflow-x-hidden">
+    <div class="container mx-auto px-4 py-8 max-w-7xl">
+        <!-- Header -->
+        <header class="text-center mb-12">
+            <h1 class="text-5xl font-bold gradient-text mb-4">Snack RPC Framework</h1>
+            <p class="text-gray-400 text-lg mb-6">High Performance Distributed RPC Framework based on Netty4</p>
+            <div class="flex justify-center gap-4 flex-wrap">
+                <span class="badge badge-purple">🛡️ Circuit Breaker</span>
+                <span class="badge badge-green">⚡ Async Call</span>
+                <span class="badge badge-pink">📊 Metrics</span>
+                <span class="badge badge-blue">🔄 Retry Policy</span>
+            </div>
+        </header>
+
+        <!-- Main Architecture -->
+        <div class="relative">
+            <!-- Client Side -->
+            <div class="grid lg:grid-cols-3 gap-8 mb-8">
+                <!-- Client -->
+                <div class="lg:col-span-1">
+                    <div class="card rounded-2xl p-6 glow-purple">
+                        <div class="flex items-center gap-3 mb-6">
+                            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                                <span class="text-xl">👤</span>
+                            </div>
+                            <div>
+                                <h3 class="text-xl font-bold text-purple-400">Client Side</h3>
+                                <p class="text-gray-400 text-sm">RPC Consumer</p>
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-4">
+                            <!-- Application -->
+                            <div class="bg-dark/50 rounded-xl p-4 border border-purple-500/20">
+                                <h4 class="font-semibold text-purple-300 mb-2">📦 Application Layer</h4>
+                                <p class="text-gray-400 text-sm">Business Service Proxy</p>
+                            </div>
+                            
+                            <!-- RpcInvoker -->
+                            <div class="bg-dark/50 rounded-xl p-4 border border-purple-500/30">
+                                <h4 class="font-semibold text-purple-300 mb-2">🔄 RpcInvoker</h4>
+                                <p class="text-gray-400 text-sm mb-2">Dynamic Proxy + Load Balance</p>
+                                <div class="flex flex-wrap gap-2">
+                                    <span class="text-xs bg-purple-500/20 text-purple-300 px-2 py-1 rounded">RoundRobin</span>
+                                    <span class="text-xs bg-purple-500/20 text-purple-300 px-2 py-1 rounded">Random</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Features Grid -->
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="bg-dark/50 rounded-lg p-3 text-center border border-pink-500/20">
+                                    <span class="text-2xl">🔮</span>
+                                    <p class="text-pink-400 text-xs mt-1 font-medium">RpcFuture</p>
+                                    <p class="text-gray-500 text-xs">Async/Callback</p>
+                                </div>
+                                <div class="bg-dark/50 rounded-lg p-3 text-center border border-red-500/20">
+                                    <span class="text-2xl">⚡</span>
+                                    <p class="text-red-400 text-xs mt-1 font-medium">CircuitBreaker</p>
+                                    <p class="text-gray-500 text-xs">3 States</p>
+                                </div>
+                                <div class="bg-dark/50 rounded-lg p-3 text-center border border-green-500/20">
+                                    <span class="text-2xl">🚦</span>
+                                    <p class="text-green-400 text-xs mt-1 font-medium">RateLimiter</p>
+                                    <p class="text-gray-500 text-xs">Token Bucket</p>
+                                </div>
+                                <div class="bg-dark/50 rounded-lg p-3 text-center border border-yellow-500/20">
+                                    <span class="text-2xl">🔁</span>
+                                    <p class="text-yellow-400 text-xs mt-1 font-medium">RetryPolicy</p>
+                                    <p class="text-gray-500 text-xs">Exponential</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Center - Network & Protocol -->
+                <div class="lg:col-span-1">
+                    <div class="card rounded-2xl p-6 h-full flex flex-col">
+                        <!-- Network -->
+                        <div class="text-center mb-6">
+                            <div class="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center mb-4 float">
+                                <span class="text-3xl">🌐</span>
+                            </div>
+                            <h3 class="text-xl font-bold text-white mb-2">TCP Connection</h3>
+                            <p class="text-gray-400 text-sm">Netty ChannelPool</p>
+                        </div>
+                        
+                        <!-- Protocol -->
+                        <div class="flex-1 bg-dark/50 rounded-xl p-4 border border-purple-500/20">
+                            <h4 class="font-semibold text-purple-300 mb-4 text-center">📋 RPC Protocol</h4>
+                            <div class="space-y-2">
+                                <div class="flex items-center justify-between bg-card/50 rounded-lg p-3">
+                                    <span class="text-purple-400 font-mono text-sm">Magic</span>
+                                    <span class="badge badge-purple">0xSNACK</span>
+                                </div>
+                                <div class="flex items-center justify-between bg-card/50 rounded-lg p-3">
+                                    <span class="text-purple-400 font-mono text-sm">Version</span>
+                                    <span class="badge badge-blue">v1.0</span>
+                                </div>
+                                <div class="flex items-center justify-between bg-card/50 rounded-lg p-3">
+                                    <span class="text-purple-400 font-mono text-sm">TraceId</span>
+                                    <span class="text-xs text-gray-400 font-mono">UUID</span>
+                                </div>
+                                <div class="flex items-center justify-between bg-card/50 rounded-lg p-3">
+                                    <span class="text-purple-400 font-mono text-sm">Body</span>
+                                    <span class="badge badge-green">ProtoStuff</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Server Side -->
+                <div class="lg:col-span-1">
+                    <div class="card rounded-2xl p-6 glow-green">
+                        <div class="flex items-center gap-3 mb-6">
+                            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-teal-500 flex items-center justify-center">
+                                <span class="text-xl">🖥️</span>
+                            </div>
+                            <div>
+                                <h3 class="text-xl font-bold text-green-400">Server Side</h3>
+                                <p class="text-gray-400 text-sm">RPC Provider</p>
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-4">
+                            <!-- Business Service -->
+                            <div class="bg-dark/50 rounded-xl p-4 border border-green-500/20">
+                                <h4 class="font-semibold text-green-300 mb-2">📦 Business Service</h4>
+                                <p class="text-gray-400 text-sm mb-2">DemoService / UserService / OrderService</p>
+                            </div>
+                            
+                            <!-- Thread Pool -->
+                            <div class="bg-dark/50 rounded-xl p-4 border border-green-500/30">
+                                <h4 class="font-semibold text-green-300 mb-2">🧵 Thread Pool</h4>
+                                <div class="grid grid-cols-3 gap-2 text-center">
+                                    <div class="bg-green-500/10 rounded-lg p-2">
+                                        <p class="text-green-400 font-bold">16</p>
+                                        <p class="text-gray-500 text-xs">Core</p>
+                                    </div>
+                                    <div class="bg-green-500/10 rounded-lg p-2">
+                                        <p class="text-green-400 font-bold">64</p>
+                                        <p class="text-gray-500 text-xs">Max</p>
+                                    </div>
+                                    <div class="bg-green-500/10 rounded-lg p-2">
+                                        <p class="text-green-400 font-bold">1024</p>
+                                        <p class="text-gray-500 text-xs">Queue</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Pipeline -->
+                            <div class="bg-dark/50 rounded-xl p-4 border border-green-500/20">
+                                <h4 class="font-semibold text-green-300 mb-2">⚙️ Netty Pipeline</h4>
+                                <div class="flex items-center justify-between text-sm">
+                                    <span class="text-blue-400">Decoder</span>
+                                    <span class="text-gray-500">→</span>
+                                    <span class="text-green-400">Handler</span>
+                                    <span class="text-gray-500">→</span>
+                                    <span class="text-purple-400">Encoder</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Heartbeat -->
+                            <div class="bg-dark/50 rounded-xl p-4 border border-red-500/20">
+                                <h4 class="font-semibold text-red-400 mb-2">💓 Heartbeat</h4>
+                                <p class="text-gray-400 text-sm">IdleStateHandler Auto-Probe</p>
+                                <p class="text-gray-500 text-xs mt-1">10s writer / 30s reader timeout</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Bottom Row -->
+            <div class="grid lg:grid-cols-3 gap-8">
+                <!-- ZooKeeper -->
+                <div class="card rounded-2xl p-6 glow-blue">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
+                            <span class="text-xl">🦉</span>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-bold text-blue-400">ZooKeeper Registry</h3>
+                            <p class="text-gray-400 text-sm">Service Discovery</p>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-dark/50 rounded-xl p-4 border border-blue-500/20">
+                        <p class="text-blue-300 font-mono text-sm mb-3">/snack/serviceDiscovery</p>
+                        <div class="space-y-2 text-sm">
+                            <div class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                <span class="text-gray-300">registerService()</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                <span class="text-gray-300">queryForInstances()</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-green-400">✓</span>
+                                <span class="text-gray-300">Health Check</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- TraceCollector -->
+                <div class="card rounded-2xl p-6 glow-pink">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-pink-500 to-yellow-500 flex items-center justify-center">
+                            <span class="text-xl">📊</span>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-bold text-pink-400">TraceCollector</h3>
+                            <p class="text-gray-400 text-sm">Metrics & Tracing</p>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="bg-dark/50 rounded-xl p-4 border border-pink-500/20 text-center">
+                            <p class="text-2xl font-bold text-pink-400">QPS</p>
+                            <p class="text-gray-400 text-xs">Queries Per Second</p>
+                        </div>
+                        <div class="bg-dark/50 rounded-xl p-4 border border-yellow-500/20 text-center">
+                            <p class="text-2xl font-bold text-yellow-400">P99</p>
+                            <p class="text-gray-400 text-xs">Latency Percentile</p>
+                        </div>
+                        <div class="bg-dark/50 rounded-xl p-4 border border-purple-500/20 text-center">
+                            <p class="text-2xl font-bold text-purple-400">99.9%</p>
+                            <p class="text-gray-400 text-xs">Success Rate</p>
+                        </div>
+                        <div class="bg-dark/50 rounded-xl p-4 border border-blue-500/20 text-center">
+                            <p class="text-2xl font-bold text-blue-400">100%</p>
+                            <p class="text-gray-400 text-xs">Sample Rate</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Admin Dashboard -->
+                <div class="card rounded-2xl p-6">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center">
+                            <span class="text-xl">🎛️</span>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-bold text-indigo-400">Admin Dashboard</h3>
+                            <p class="text-gray-400 text-sm">Monitoring & Control</p>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-3">
+                        <div class="bg-dark/50 rounded-lg p-3 flex items-center gap-3 border border-indigo-500/20 hover:border-indigo-500/50 transition-colors cursor-pointer">
+                            <span class="text-xl">📋</span>
+                            <span class="text-gray-300">Service List</span>
+                        </div>
+                        <div class="bg-dark/50 rounded-lg p-3 flex items-center gap-3 border border-indigo-500/20 hover:border-indigo-500/50 transition-colors cursor-pointer">
+                            <span class="text-xl">📈</span>
+                            <span class="text-gray-300">Metrics Dashboard</span>
+                        </div>
+                        <div class="bg-dark/50 rounded-lg p-3 flex items-center gap-3 border border-red-500/20 hover:border-red-500/50 transition-colors cursor-pointer">
+                            <span class="text-xl">🔴</span>
+                            <span class="text-gray-300">Circuit Status</span>
+                        </div>
+                        <div class="bg-dark/50 rounded-lg p-3 flex items-center gap-3 border border-purple-500/20 hover:border-purple-500/50 transition-colors cursor-pointer">
+                            <span class="text-xl">🔍</span>
+                            <span class="text-gray-300">Trace List</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Flow Arrows -->
+            <div class="hidden lg:block absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
+                <div class="relative">
+                    <div class="absolute -left-4 -top-20 w-px h-20 bg-gradient-to-b from-purple-500 to-transparent"></div>
+                    <div class="absolute -right-4 -top-20 w-px h-20 bg-gradient-to-b from-green-500 to-transparent"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Circuit Breaker State Machine -->
+        <section class="mt-16">
+            <h2 class="text-3xl font-bold text-center gradient-text mb-8">Circuit Breaker State Machine</h2>
+            <div class="card rounded-2xl p-8">
+                <div class="flex flex-wrap justify-center items-center gap-8">
+                    <!-- CLOSED -->
+                    <div class="text-center">
+                        <div class="w-32 h-32 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center mb-4 mx-auto glow-green">
+                            <div>
+                                <p class="text-2xl font-bold">CLOSED</p>
+                                <p class="text-xs opacity-75">Normal</p>
+                            </div>
+                        </div>
+                        <p class="text-gray-400 text-sm">Circuit Closed</p>
+                        <p class="text-gray-500 text-xs">All calls pass through</p>
+                    </div>
+                    
+                    <!-- Arrow 1 -->
+                    <div class="text-center">
+                        <div class="text-4xl text-gray-500 mb-2">→</div>
+                        <p class="text-red-400 text-sm">Failure ≥ 5</p>
+                    </div>
+                    
+                    <!-- OPEN -->
+                    <div class="text-center">
+                        <div class="w-32 h-32 rounded-full bg-gradient-to-br from-red-500 to-orange-600 flex items-center justify-center mb-4 mx-auto pulse">
+                            <div>
+                                <p class="text-2xl font-bold">OPEN</p>
+                                <p class="text-xs opacity-75">Breaker Tripped</p>
+                            </div>
+                        </div>
+                        <p class="text-gray-400 text-sm">Circuit Open</p>
+                        <p class="text-gray-500 text-xs">Calls are blocked</p>
+                    </div>
+                    
+                    <!-- Arrow 2 -->
+                    <div class="text-center">
+                        <div class="text-4xl text-gray-500 mb-2">→</div>
+                        <p class="text-yellow-400 text-sm">Wait 30s</p>
+                    </div>
+                    
+                    <!-- HALF_OPEN -->
+                    <div class="text-center">
+                        <div class="w-32 h-32 rounded-full bg-gradient-to-br from-yellow-500 to-amber-600 flex items-center justify-center mb-4 mx-auto">
+                            <div>
+                                <p class="text-2xl font-bold">HALF</p>
+                                <p class="text-xs opacity-75">Testing</p>
+                            </div>
+                        </div>
+                        <p class="text-gray-400 text-sm">Half Open</p>
+                        <p class="text-gray-500 text-xs">Limited calls allowed</p>
+                    </div>
+                    
+                    <!-- Decision -->
+                    <div class="text-center ml-8">
+                        <div class="text-4xl mb-2">↓</div>
+                        <div class="space-y-2">
+                            <div class="bg-green-500/20 border border-green-500/30 rounded-lg px-4 py-2">
+                                <p class="text-green-400 text-sm">✓ Success → CLOSED</p>
+                            </div>
+                            <div class="bg-red-500/20 border border-red-500/30 rounded-lg px-4 py-2">
+                                <p class="text-red-400 text-sm">✗ Failure → OPEN</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Quick Start -->
+        <section class="mt-16">
+            <h2 class="text-3xl font-bold text-center gradient-text mb-8">🚀 Quick Start</h2>
+            <div class="grid md:grid-cols-2 gap-8">
+                <div class="card rounded-2xl p-6">
+                    <h3 class="text-xl font-bold text-green-400 mb-4">1. One-Command Demo</h3>
+                    <div class="bg-dark rounded-xl p-4 font-mono text-sm">
+                        <p class="text-gray-400"># Clone and run</p>
+                        <p class="text-green-400">git clone https://github.com/zyy/snack.git</p>
+                        <p class="text-green-400">cd snack</p>
+                        <p class="text-green-400">./demo/run-demo.sh</p>
+                    </div>
+                </div>
+                <div class="card rounded-2xl p-6">
+                    <h3 class="text-xl font-bold text-purple-400 mb-4">2. Access Points</h3>
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between bg-dark/50 rounded-lg p-3">
+                            <span class="text-gray-300">Web Consumer</span>
+                            <a href="http://localhost:8080" class="badge badge-purple">:8080</a>
+                        </div>
+                        <div class="flex items-center justify-between bg-dark/50 rounded-lg p-3">
+                            <span class="text-gray-300">Admin Dashboard</span>
+                            <a href="http://localhost:8081" class="badge badge-purple">:8081</a>
+                        </div>
+                        <div class="flex items-center justify-between bg-dark/50 rounded-lg p-3">
+                            <span class="text-gray-300">ZooKeeper</span>
+                            <span class="badge badge-blue">:2181</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Footer -->
+        <footer class="mt-16 text-center text-gray-500 text-sm">
+            <p>Built with ❤️ using Netty4 + Spring Boot 2.7.x</p>
+            <p class="mt-2">Apache License 2.0</p>
+        </footer>
+    </div>
+</body>
+</html>
