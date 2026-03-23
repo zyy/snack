@@ -22,13 +22,25 @@
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <version.spring.boot>1.3.3.RELEASE</version.spring.boot>
-    <version.spring>4.2.5.RELEASE</version.spring>
+    <version.spring.boot>2.7.18</version.spring.boot>
+    <version.spring>5.2.18.RELEASE</version.spring>
     <version.netty>4.1.108.Final</version.netty>
   </properties>
 
   <dependencies>
   </dependencies>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-dependencies</artifactId>
+        <version>${version.spring.boot}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
 
   <distributionManagement>
     <repository>
@@ -67,17 +79,6 @@
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
         <version>${version.spring.boot}</version>
-        <configuration>
-          <mainClass>com.snack.demo.service.ServiceBootstrap</mainClass>
-          <classifier>exec</classifier>
-        </configuration>
-        <executions>
-          <execution>
-            <goals>
-              <goal>repackage</goal>
-            </goals>
-          </execution>
-        </executions>
       </plugin>
     </plugins>
   </build>

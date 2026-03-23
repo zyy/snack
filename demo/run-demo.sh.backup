@@ -34,11 +34,6 @@ cleanup() {
         kill $WEB_PID 2>/dev/null || true
     fi
     
-    if [ -n "$ADMIN_PID" ]; then
-        echo "Stopping Admin UI (PID: $ADMIN_PID)..."
-        kill $ADMIN_PID 2>/dev/null || true
-    fi
-    
     # Stop ZooKeeper container
     echo "Stopping ZooKeeper container..."
     docker-compose -f "$SCRIPT_DIR/docker-compose.yml" down 2>/dev/null || true
@@ -120,10 +115,6 @@ check_zookeeper_ready() {
 echo "========================================"
 echo "Snack RPC Framework Demo"
 echo "========================================"
-
-# Set Maven path
-export M2_HOME="$HOME/.local/opt/apache-maven-3.8.9"
-export PATH="$M2_HOME/bin:$PATH"
 
 # Check prerequisites
 echo "Checking prerequisites..."
@@ -209,7 +200,7 @@ fi
 # Build the project
 echo ""
 echo "Building Snack RPC project..."
-mvn clean install -DskipTests -U
+mvn clean package -DskipTests
 
 # Backup original configs and create demo configuration
 echo ""
@@ -228,11 +219,8 @@ echo "========================================"
 echo ""
 echo "1. Starting Service Provider (port 9999)..."
 cd snack-service-demo
-mvn spring-boot:run \
-  -Dspring-boot.run.jvmArguments="-Dspring.main.banner_mode=off -Dspring.devtools.restart.enabled=false -Dserver.port=9999 -Dlogging.level.com.snack=INFO" \
-  > "$LOGS_DIR/service.log" 2>&1 &
+java -Dspring.output.ansi.enabled=NEVER -jar target/snack-service-demo-1.0-SNAPSHOT-exec.jar --server.port=9999 > "$LOGS_DIR/service.log" 2>&1 &
 SERVICE_PID=$!
-echo "Service Provider PID: $SERVICE_PID"
 cd ..
 
 echo "Waiting for service to start (max 45 seconds)..."
@@ -246,7 +234,7 @@ for i in {1..45}; do
     fi
     
     # Check log for successful startup
-    if grep -q "RpcServer started on port 9999" "$LOGS_DIR/service.log" 2>/dev/null; then
+    if tail -10 "$LOGS_DIR/service.log" 2>/dev/null | grep -q "RpcServer started on port 9999"; then
         echo "✅ Service Provider is up after $i seconds"
         break
     elif [ $i -eq 45 ]; then
@@ -263,11 +251,8 @@ done
 echo ""
 echo "2. Starting Web Consumer (port 8080)..."
 cd snack-web-demo
-nohup mvn spring-boot:run \
-  -Dspring-boot.run.jvmArguments="-Dspring.main.banner_mode=off -Dspring.devtools.restart.enabled=false -Dserver.port=8080 -Dlogging.level.com.snack=INFO" \
-  > "$LOGS_DIR/web.log" 2>&1 &
+java -Dspring.output.ansi.enabled=NEVER -jar target/snack-web-demo-1.0-SNAPSHOT-exec.jar --server.port=8080 > "$LOGS_DIR/web.log" 2>&1 &
 WEB_PID=$!
-echo "Web Consumer PID: $WEB_PID"
 cd ..
 
 echo "Waiting for web consumer to start (max 45 seconds)..."
@@ -280,8 +265,8 @@ for i in {1..45}; do
         exit 1
     fi
     
-    # Check log for successful startup
-    if grep -q "Started.*Application\|RpcServer started\|Tomcat started" "$LOGS_DIR/web.log" 2>/dev/null; then
+    # Check log for successful startup - web consumer might show different success message
+    if tail -10 "$LOGS_DIR/web.log" 2>/dev/null | grep -q "Started.*Application\|Started.*WebBootstrap\|RpcServer started\|Tomcat started"; then
         echo "✅ Web Consumer is up after $i seconds"
         break
     elif [ $i -eq 45 ]; then
@@ -300,41 +285,8 @@ echo "Demo is running!"
 echo "========================================"
 echo "Service Provider: http://localhost:9999"
 echo "Web Consumer:     http://localhost:8080"
-echo "Admin UI:         http://localhost:8081"
 echo "Logs directory:   $LOGS_DIR"
 echo ""
-
-# Start Admin UI
-echo "3. Starting Admin UI (port 8081)..."
-cd snack-admin
-nohup mvn spring-boot:run \
-  -Dspring-boot.run.jvmArguments="-Dspring.main.banner_mode=off -Dspring.devtools.restart.enabled=false -Dserver.port=8081 -Dlogging.level.com.snack=INFO" \
-  > "$LOGS_DIR/admin.log" 2>&1 &
-ADMIN_PID=$!
-echo "Admin UI PID: $ADMIN_PID"
-cd ..
-
-echo "Waiting for Admin UI to start (max 45 seconds)..."
-for i in {1..45}; do
-    if ! kill -0 $ADMIN_PID 2>/dev/null; then
-        echo "❌ Admin UI process died"
-        echo "Admin logs (last 50 lines):"
-        tail -50 "$LOGS_DIR/admin.log"
-        exit 1
-    fi
-    
-    if grep -q "Started.*Application\|RpcServer started\|Tomcat started" "$LOGS_DIR/admin.log" 2>/dev/null; then
-        echo "✅ Admin UI is up after $i seconds"
-        break
-    elif [ $i -eq 45 ]; then
-        echo "❌ Admin UI failed to start within 45 seconds"
-        echo "Admin logs (last 50 lines):"
-        tail -50 "$LOGS_DIR/admin.log"
-        exit 1
-    else
-        sleep 1
-    fi
-done
 
 # Test the RPC call
 echo "Testing RPC call..."
@@ -374,15 +326,12 @@ echo "========================================"
 echo "- ZooKeeper:      localhost:2181 (service registry)"
 echo "- Service:        localhost:9999 (RPC service provider)"
 echo "- Web Consumer:   localhost:8080 (RPC consumer)"
-echo "- Admin UI:       localhost:8081 (web admin interface)"
 echo "- Service Log:    $LOGS_DIR/service.log"
 echo "- Web Log:        $LOGS_DIR/web.log"
-echo "- Admin Log:      $LOGS_DIR/admin.log"
 echo ""
 echo "Additional commands:"
 echo "  View service logs:      tail -f $LOGS_DIR/service.log"
 echo "  View web logs:          tail -f $LOGS_DIR/web.log"
-echo "  View admin logs:        tail -f $LOGS_DIR/admin.log"
 echo "  View ZooKeeper logs:    docker-compose -f $SCRIPT_DIR/docker-compose.yml logs -f"
 echo "  Test RPC call again:    curl http://localhost:8080/demo/hello"
 echo ""

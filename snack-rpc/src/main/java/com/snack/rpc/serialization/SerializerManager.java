@@ -80,7 +80,7 @@ public class SerializerManager {
             initialized = true;
             
             logger.info("SerializerManager initialized with {} serializers, default={}",
-                    serializers.size(), defaultSerializer != null ? defaultSerializer.getName() : "none");
+                    new Object[]{serializers.size(), defaultSerializer != null ? defaultSerializer.getName() : "none"});
             
         } catch (Exception e) {
             logger.error("Failed to initialize SerializerManager", e);
