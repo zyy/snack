@@ -19,6 +19,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * - Trace context propagation across RPC calls
  * - Per-call latency, success/failure recording
  * - Aggregated metrics: QPS, latency percentiles, error rate
+ * - Integration with CircuitBreakerRegistry for circuit breaker state
  * 
  * Created by yangyang.zhao on 2017/8/8.
  */
@@ -34,6 +35,10 @@ public class TraceCollector {
     // Config
     private final boolean enabled;
     private final int sampleRate; // 0-100, percent of calls to trace
+    
+    // QPS calculation
+    private final ConcurrentLinkedDeque<Long> timestamps = new ConcurrentLinkedDeque<>();
+    private final ConcurrentHashMap<String, ConcurrentLinkedDeque<Long>> serviceTimestamps = new ConcurrentLinkedDeque<>();
     
     public TraceCollector(boolean enabled, int sampleRate) {
         this(enabled, sampleRate, 10000, 1000);
@@ -111,6 +116,7 @@ public class TraceCollector {
         
         addSpan(span);
         updateMetrics(span);
+        recordTimestamp(serviceName, methodName);
     }
     
     /**
@@ -135,6 +141,7 @@ public class TraceCollector {
         
         addSpan(span);
         updateMetrics(span);
+        recordTimestamp(serviceName, methodName);
     }
     
     private boolean shouldSample() {
@@ -154,8 +161,74 @@ public class TraceCollector {
         metrics.record(span);
     }
     
+    private void recordTimestamp(String serviceName, String methodName) {
+        long now = System.currentTimeMillis();
+        timestamps.addLast(now);
+        // Clean old timestamps (older than 1 minute)
+        while (!timestamps.isEmpty() && timestamps.peekFirst() < now - 60000) {
+            timestamps.removeFirst();
+        }
+        
+        String key = serviceName + ":" + methodName;
+        ConcurrentLinkedDeque<Long> serviceTs = serviceTimestamps.computeIfAbsent(key, k -> new ConcurrentLinkedDeque<>());
+        serviceTs.addLast(now);
+        while (!serviceTs.isEmpty() && serviceTs.peekFirst() < now - 60000) {
+            serviceTs.removeFirst();
+        }
+    }
+    
     /**
-     * Get all recent spans.
+     * Get QPS for all services combined.
+     */
+    public double getGlobalQPS() {
+        long now = System.currentTimeMillis();
+        long oneMinuteAgo = now - 60000;
+        
+        int count = 0;
+        for (Long ts : timestamps) {
+            if (ts >= oneMinuteAgo) count++;
+        }
+        return count / 60.0; // per second
+    }
+    
+    /**
+     * Get QPS for a specific service method.
+     */
+    public double getServiceQPS(String serviceName, String methodName) {
+        String key = serviceName + ":" + methodName;
+        ConcurrentLinkedDeque<Long> ts = serviceTimestamps.get(key);
+        if (ts == null) return 0;
+        
+        long now = System.currentTimeMillis();
+        long oneMinuteAgo = now - 60000;
+        
+        int count = 0;
+        for (Long t : ts) {
+            if (t >= oneMinuteAgo) count++;
+        }
+        return count / 60.0;
+    }
+    
+    /**
+     * Get all service QPS values.
+     */
+    public Map<String, Double> getAllServiceQPS() {
+        Map<String, Double> result = new HashMap<>();
+        long now = System.currentTimeMillis();
+        long oneMinuteAgo = now - 60000;
+        
+        for (Map.Entry<String, ConcurrentLinkedDeque<Long>> entry : serviceTimestamps.entrySet()) {
+            int count = 0;
+            for (Long ts : entry.getValue()) {
+                if (ts >= oneMinuteAgo) count++;
+            }
+            result.put(entry.getKey(), count / 60.0);
+        }
+        return result;
+    }
+    
+    /**
+     * Get recent traces (for trace list).
      */
     public List<Span> getRecentSpans(int limit) {
         List<Span> result = new ArrayList<>();
@@ -181,17 +254,120 @@ public class TraceCollector {
     }
     
     /**
-     * Get metrics for all services.
+     * Get aggregated metrics for all services.
+     */
+    public Map<String, Map<String, Object>> getAllMetricsSummary() {
+        Map<String, Map<String, Object>> result = new HashMap<>();
+        
+        // Add service names from recent spans
+        Set<String> services = new HashSet<>();
+        for (Span span : recentSpans) {
+            services.add(span.serviceName);
+        }
+        
+        for (String serviceName : services) {
+            Map<String, Object> summary = new HashMap<>();
+            summary.put("serviceName", serviceName);
+            
+            // Calculate aggregated metrics for this service
+            long totalCalls = 0, successCalls = 0, failureCalls = 0;
+            double totalLatency = 0;
+            List<Long> allLatencies = new ArrayList<>();
+            
+            for (Span span : recentSpans) {
+                if (span.serviceName.equals(serviceName)) {
+                    totalCalls++;
+                    if (span.success) successCalls++;
+                    else failureCalls++;
+                    totalLatency += span.durationMs;
+                    allLatencies.add(span.durationMs);
+                }
+            }
+            
+            summary.put("totalCalls", totalCalls);
+            summary.put("successCalls", successCalls);
+            summary.put("failureCalls", failureCalls);
+            summary.put("successRate", totalCalls > 0 ? (double) successCalls / totalCalls * 100 : 0);
+            summary.put("avgLatency", totalCalls > 0 ? totalLatency / totalCalls : 0);
+            summary.put("qps", getServiceQPS(serviceName, ""));
+            
+            // Calculate percentiles
+            if (!allLatencies.isEmpty()) {
+                Collections.sort(allLatencies);
+                int size = allLatencies.size();
+                summary.put("p50", allLatencies.get((int)(size * 0.5) - 1));
+                summary.put("p90", allLatencies.get((int)(size * 0.9) - 1));
+                summary.put("p99", allLatencies.get(Math.min((int)(size * 0.99), size - 1)));
+            } else {
+                summary.put("p50", 0.0);
+                summary.put("p90", 0.0);
+                summary.put("p99", 0.0);
+            }
+            
+            result.put(serviceName, summary);
+        }
+        
+        return result;
+    }
+    
+    /**
+     * Get metrics for all services (legacy method, returns ServiceMetrics objects).
      */
     public Map<String, ServiceMetrics> getAllMetrics() {
         return new HashMap<>(serviceMetrics);
     }
     
     /**
-     * Get metrics for a specific service.
+     * Get metrics for a specific service method.
      */
     public ServiceMetrics getMetrics(String serviceName, String methodName) {
         return serviceMetrics.get(serviceName + ":" + methodName);
+    }
+    
+    /**
+     * Get metrics for a specific service (aggregated over all methods).
+     */
+    public Map<String, Object> getServiceMetrics(String serviceName) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("serviceName", serviceName);
+        
+        long totalCalls = 0, successCalls = 0, failureCalls = 0;
+        List<Long> allLatencies = new ArrayList<>();
+        
+        for (Span span : recentSpans) {
+            if (span.serviceName.equals(serviceName)) {
+                totalCalls++;
+                if (span.success) successCalls++;
+                else failureCalls++;
+                allLatencies.add(span.durationMs);
+            }
+        }
+        
+        result.put("totalCalls", totalCalls);
+        result.put("successCalls", successCalls);
+        result.put("failureCalls", failureCalls);
+        result.put("successRate", totalCalls > 0 ? (double) successCalls / totalCalls * 100 : 0);
+        result.put("qps", getServiceQPS(serviceName, ""));
+        
+        if (!allLatencies.isEmpty()) {
+            Collections.sort(allLatencies);
+            int size = allLatencies.size();
+            result.put("avgLatency", allLatencies.stream().mapToLong(Long::longValue).average().orElse(0));
+            result.put("minLatency", allLatencies.get(0));
+            result.put("maxLatency", allLatencies.get(size - 1));
+            result.put("p50", allLatencies.get((int)(size * 0.5) - 1));
+            result.put("p90", allLatencies.get((int)(size * 0.9) - 1));
+            result.put("p99", allLatencies.get(Math.min((int)(size * 0.99), size - 1)));
+        } else {
+            result.put("avgLatency", 0.0);
+            result.put("minLatency", 0);
+            result.put("maxLatency", 0);
+            result.put("p50", 0.0);
+            result.put("p90", 0.0);
+            result.put("p99", 0.0);
+        }
+        
+        return result;
     }
     
     /**
@@ -200,6 +376,8 @@ public class TraceCollector {
     public void reset() {
         recentSpans.clear();
         serviceMetrics.clear();
+        timestamps.clear();
+        serviceTimestamps.clear();
     }
     
     // ====================

@@ -10,7 +10,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import java.util.Map;
 
 /**
+ * Controller for service management pages.
  * Created by yangyang.zhao on 2017/8/10.
+ * Updated: 2026/3/23 - Added enhanced service detail with metrics and circuit breaker support.
  */
 @Controller
 public class ServiceController {
@@ -24,7 +26,8 @@ public class ServiceController {
     }
 
     @RequestMapping("/service/detail")
-    public String welcome(Map<String, Object> model, @RequestParam String serviceName) {
+    public String serviceDetail(Map<String, Object> model, @RequestParam String serviceName) {
+        model.put("serviceName", serviceName);
         model.put("serviceInstances", this.applicationService.getServiceInstances(serviceName));
         return "service_detail";
     }
