@@ -388,7 +388,7 @@
                 $('#avgLatency').text(avgLatency);
                 
                 // Update service table
-                if (services.length === 0) {
+                if (services.length == 0) {
                     tableHtml = '<tr><td colspan="12" class="text-center text-muted">暂无数据</td></tr>';
                 } else {
                     services.forEach(function(svc) {
@@ -498,7 +498,7 @@
                                     <small>阻止: ${cb.blockedRequests}</small>
                                 </div>
                             </div>
-                            ${cb.state === 'OPEN' ? '<div class="text-danger" style="margin-top:10px;">等待恢复: ' + Math.ceil(cb.timeUntilRetry / 1000) + '秒</div>' : ''}
+                            <#if cb.state == 'OPEN'><div class="text-danger" style="margin-top:10px;">等待恢复: ${((cb.timeUntilRetry?number)?round / 1000)?c}秒</div></#if>
                             <div style="margin-top:10px;">
                                 <button class="btn btn-xs btn-primary" onclick="resetCircuitBreaker('${cb.name}')">重置</button>
                                 <button class="btn btn-xs btn-danger" onclick="forceOpenCircuitBreaker('${cb.name}')">强制开启</button>
@@ -506,7 +506,7 @@
                         </div>
                     `;
                 });
-                if (html === '') {
+                if (html == '') {
                     html = '<div class="text-muted">暂无熔断器数据</div>';
                 }
                 $('#circuitBreakerList').html(html);
@@ -519,8 +519,8 @@
             if (response.success) {
                 const health = response.data;
                 let html = `
-                    <div class="health-badge ${health.status === 'UP' ? 'up' : 'down'}">
-                        ${health.status === 'UP' ? '✅ 系统正常' : '❌ 系统异常'}
+                    <div class="health-badge <#if health.status == 'UP'>up<#else>down</#if>">
+                        <#if health.status == 'UP'>✅ 系统正常<#else>❌ 系统异常</#if>
                     </div>
                     <table class="table table-condensed" style="margin-top:15px;">
                         <tr>
@@ -531,14 +531,14 @@
                 `;
                 
                 for (const [name, component] of Object.entries(health.components)) {
-                    const statusClass = component.status === 'UP' ? 'success' : 'danger';
+                    const statusClass = component.status == 'UP' ? 'success' : 'danger';
                     let details = '';
-                    if (name === 'traceCollector') {
+                    if (name == 'traceCollector') {
                         details = `span数量: ${component.recentSpanCount}`;
-                    } else if (name === 'circuitBreakerRegistry') {
+                    } else if (name == 'circuitBreakerRegistry') {
                         const counts = component.stateCounts;
                         details = `CLOSED: ${counts.CLOSED}, OPEN: ${counts.OPEN}, HALF_OPEN: ${counts.HALF_OPEN}`;
-                    } else if (name === 'system') {
+                    } else if (name == 'system') {
                         const used = ((component.usedMemory / component.maxMemory) * 100).toFixed(1);
                         details = `内存: ${used}% (${(component.usedMemory / 1024 / 1024).toFixed(0)}MB)`;
                     }
