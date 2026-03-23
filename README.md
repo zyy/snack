@@ -22,7 +22,9 @@
 | **限流** | 令牌桶 QPS 限制 + 突发容量 |
 | **重试策略** | FIXED / EXPONENTIAL / FIBONACCI / JITTER |
 | **心跳机制** | IdleStateHandler 自动探活 + 断线重连 |
-| **Spring Boot** | `RpcApplication` / `WebApplication` 双入口 |
+| **监控追踪** | TraceCollector 链路追踪 + Metrics 指标收集 |
+| **可视化** | Admin Dashboard 实时监控面板 |
+| **Spring Boot** | Spring Boot 2.7.x 集成，支持热配置 |
 
 ---
 
@@ -47,7 +49,7 @@
 │                          │                                   │
 │  ┌──────────────────────▼───────────────────────────┐     │
 │  │            ChannelPool (Netty)                   │     │
-│  │  IdleStateHandler → HeartbeatHandler → Encoder   │     │
+│  │  IdleStateHandler → HeartbeatHandler → Encoder │     │
 │  └──────────────────────────────────────────────────┘     │
 └──────────────────────────┼──────────────────────────────────┘
                            │ TCP
@@ -55,7 +57,7 @@
 │                          Server                              │
 │  ┌──────────────────────────────────────────────────┐     │
 │  │         ServerChannelInitializer (Pipeline)        │     │
-│  │  IdleStateHandler → HeartbeatHandler → Decoder   │     │
+│  │  IdleStateHandler → HeartbeatHandler → Decoder    │     │
 │  └──────────────────────────┬─────────────────────────┘     │
 │                             │                                   │
 │  ┌─────────────────────────▼─────────────────────────┐     │
@@ -69,13 +71,19 @@
 │                         │                                   │
 │  ┌─────────────────────▼──────────────────────────────┐     │
 │  │              Business Service                       │     │
-│  │  DemoServiceImpl / UserService / OrderService ...   │     │
+│  │  DemoServiceImpl / UserService / OrderService ...  │     │
 │  └───────────────────────────────────────────────────┘     │
 │                                                               │
 │  ┌───────────────────────────────────────────────────┐     │
 │  │              ZooRegistry                           │     │
-│  │  registerService() → Zookeeper                     │     │
-│  │  queryForInstances() → Service Discovery           │     │
+│  │  registerService() → Zookeeper                    │     │
+│  │  queryForInstances() → Service Discovery          │     │
+│  └───────────────────────────────────────────────────┘     │
+│                                                               │
+│  ┌───────────────────────────────────────────────────┐     │
+│  │           TraceCollector (Metrics)                  │     │
+│  │  - QPS / 成功率 / 延迟百分位 (P50/P90/P99)        │     │
+│  │  - 链路追踪 (TraceId)                              │     │
 │  └───────────────────────────────────────────────────┘     │
 └───────────────────────────────────────────────────────────────┘
 ```
@@ -84,158 +92,153 @@
 
 ## 快速开始
 
-### 1. 定义接口（snack-contract）
+### 环境要求
+- Java 11+ (兼容 Java 8)
+- Maven 3.6+
+- Docker (用于 ZooKeeper)
 
-```java
-public interface DemoService {
-    String sayHello(String name);
-    User getUser(Long userId);
-}
+### 1. 一键启动演示
+
+```bash
+# 克隆仓库
+git clone https://github.com/zyy/snack.git
+cd snack
+
+# 运行演示（自动构建并启动所有服务）
+chmod +x demo/run-demo.sh
+./demo/run-demo.sh
 ```
 
-### 2. 实现服务（snack-service-demo）
+演示将自动：
+1. 🚀 启动 ZooKeeper 容器（Docker）
+2. 🔨 构建整个项目
+3. 📡 启动 Service Provider（端口 9999）
+4. 🌐 启动 Web Consumer（端口 8080）
+5. 📊 启动 Admin Dashboard（端口 8081）
+6. ✅ 执行测试 RPC 调用
 
-```java
-public class DemoServiceImpl implements DemoService {
-    @Override
-    public String sayHello(String name) {
-        return "Hello, " + name + "!";
-    }
-    
-    @Override
-    public User getUser(Long userId) {
-        return new User(userId, "User-" + userId);
-    }
-}
+### 2. 访问服务
+
+| 服务 | 地址 | 说明 |
+|------|------|------|
+| Web Consumer | http://localhost:8080 | RPC 消费者，访问 `/` 触发调用 |
+| Admin Dashboard | http://localhost:8081 | 可视化监控面板 |
+| ZooKeeper | localhost:2181 | 服务注册中心 |
+
+### 3. 测试 RPC 调用
+
+```bash
+# 触发 RPC 调用
+curl http://localhost:8080/
+
+# 查看服务列表
+curl http://localhost:8081/service/list
+
+# 查看追踪数据
+curl http://localhost:8081/api/traces/recent?limit=10
+
+# 查看指标数据
+curl http://localhost:8081/api/metrics/all
 ```
 
-**启动服务端：**
+---
 
-```java
-// RpcApplication 方式
-public class ServiceBootstrap {
-    public static void main(String[] args) throws Exception {
-        RpcServer server = new RpcServer();
-        server.registerService(DemoService.class, new DemoServiceImpl());
-        ZooRegistry.getInstance().registerService(
-                "com.snack.demo.service",  // 服务名
-                9999                        // 端口
-        );
-        server.start();
-    }
-}
+## 模块说明
 
-// 或 Spring Boot 方式
-@SpringBootApplication
-public class Application {
-    public static void main(String[] args) {
-        RpcApplication.run(Application.class, args);
-    }
-}
 ```
-
-**application.conf：**
-
-```hocon
-server {
-  port = 9999
-  name = "com.snack.demo.service"
-}
-zookeeper {
-  connectString = "192.168.9.153:2181"
-  basePath = "/snack/serviceDiscovery"
-}
-```
-
-### 3. 客户端调用
-
-```java
-// 获取代理
-RpcClient rpcClient = new RpcClient();
-DemoService demoService = rpcClient.getProxy(DemoService.class);
-
-// 同步调用
-String result = demoService.sayHello("Snack");
-
-// 异步调用（RpcFuture）
-RpcFuture future = demoService.$async("sayHello", new Object[]{"Snack"});
-Object result = future.get(3000, TimeUnit.MILLISECONDS);
-
-// 异步回调
-future.addCallback(new RpcFuture.RpcCallback() {
-    @Override
-    public void onSuccess(Object result) {
-        System.out.println("Success: " + result);
-    }
-    @Override
-    public void onFailure(Exception e) {
-        System.out.println("Failed: " + e.getMessage());
-    }
-});
+snack/
+├── snack-rpc                  # 核心 RPC 框架
+│   └── src/main/java/com/snack/rpc/
+│       ├── RpcServer.java              # 服务端（Netty Server）
+│       ├── RpcClient.java             # 客户端（获取代理）
+│       ├── RpcApplication.java         # Spring Boot 入口
+│       ├── codec/                     # 编解码器
+│       ├── client/                    # 客户端组件
+│       │   ├── RpcInvoker.java        # 调用器
+│       │   ├── RpcFuture.java         # 异步 Future
+│       │   ├── CircuitBreaker.java    # 熔断器
+│       │   ├── RateLimiter.java       # 令牌桶限流
+│       │   └── RetryPolicy.java       # 重试策略
+│       ├── server/                    # 服务端组件
+│       │   └── ServerHandler.java      # 请求处理
+│       ├── registry/                  # 注册中心
+│       ├── serialization/             # 序列化
+│       ├── spi/                      # SPI 扩展
+│       └── trace/                    # 追踪指标
+│           ├── TraceCollector.java    # 指标收集器
+│           └── CircuitBreakerRegistry.java  # 熔断器注册表
+│
+├── snack-contract-demo         # 接口定义示例
+├── snack-service-demo          # 服务端示例
+├── snack-web-demo              # Web 消费者示例
+└── snack-admin                 # 管理后台
+    └── src/main/java/com/snack/admin/
+        ├── controller/                # 控制器
+        │   ├── ServiceController.java  # 服务列表
+        │   ├── MetricsController.java  # 指标 API
+        │   └── TraceController.java    # 追踪 API
+        └── service/                    # 服务层
 ```
 
 ---
 
 ## 配置说明
 
-### 服务端配置
+### application.conf 示例
 
 ```hocon
-rpc.server {
-  workerThreads = 0                    # NIO线程数（0=2*CPU核数）
-  threadPool {
-    corePoolSize = 16                  # 核心线程数
-    maxPoolSize = 64                   # 最大线程数
-    queueCapacity = 1024               # 队列容量（防OOM）
-    keepAliveSeconds = 60              # 空闲线程存活时间
-  }
-  heartbeat {
-    writerIdleTime = 10               # 写空闲发送心跳（秒）
-    readerIdleTime = 30               # 读空闲超时关闭连接（秒）
-  }
+# 服务配置
+server {
+  port = 9999
+  name = "com.snack.demo.service"
 }
-```
 
-### 客户端配置
+# ZooKeeper 注册中心
+zookeeper {
+  basePath = "/snack/serviceDiscovery"
+  connectString = "localhost:2181"
+}
 
-```hocon
+# 追踪配置
+tracing {
+  enabled = true
+  sampleRate = 100    # 采样率 0-100%
+}
+
+# RPC 配置
 rpc {
-  invoke.timeout = 5000               # 调用超时（毫秒）
+  invoke.timeout = 5000
   
-  # 重试策略
-  invoke.retry {
-    enable = true                      # 是否启用重试
-    maxAttempts = 3                   # 最大尝试次数
-    baseDelayMs = 100                 # 基础重试延迟（毫秒）
-    maxDelayMs = 2000                # 最大重试延迟（毫秒）
-    strategy = "EXPONENTIAL"          # 重试策略
-    jitter = 0.2                      # 抖动因子（0.0~1.0）
+  # 重试配置
+  retry {
+    enable = true
+    maxAttempts = 3
+    strategy = "EXPONENTIAL"
   }
   
-  # 熔断器
+  # 熔断配置
   circuitBreaker {
-    enable = true                     # 是否启用熔断
-    failureThreshold = 5              # 触发熔断的连续失败次数
-    recoveryTimeoutMs = 30000        # 熔断恢复等待时间（毫秒）
-    halfOpenMaxCalls = 3            # 半开状态允许的试探次数
+    enable = true
+    failureThreshold = 5
+    recoveryTimeoutMs = 30000
   }
   
-  # 限流器
+  # 限流配置
   rateLimit {
-    qps = 100                        # 每秒允许的最大请求数
-    burst = 50                       # 突发容量
+    qps = 100
+    burst = 50
   }
 }
 ```
 
 ### 重试策略
 
-| 策略 | 描述 | 适用场景 |
-|------|------|---------|
-| `FIXED` | 固定延迟 | 稳定的下游服务 |
-| `EXPONENTIAL` | 指数退避 (100ms → 200ms → 400ms...) | 网络不稳定、临时故障 |
-| `FIBONACCI` | 斐波那契退避 | 比指数更平滑的恢复 |
-| `JITTER` | 纯随机延迟 | 避免惊群效应 |
+| 策略 | 描述 |
+|------|------|
+| `FIXED` | 固定延迟 100ms |
+| `EXPONENTIAL` | 指数退避 100ms → 200ms → 400ms... |
+| `FIBONACCI` | 斐波那契退避 |
+| `JITTER` | 纯随机延迟 |
 
 ### 熔断器状态机
 
@@ -247,36 +250,50 @@ OPEN（熔断）
   │ 等待 30s
   ▼
 HALF_OPEN（试探）
-  │ 成功 → CLOSED（恢复）
-  │ 失败 → OPEN（重新熔断）
+  │ 成功 → CLOSED
+  │ 失败 → OPEN
 ```
 
 ---
 
-## 模块说明
+## SPI 扩展机制
+
+框架支持通过 SPI 机制扩展：
+
+| SPI 接口 | 默认实现 | 说明 |
+|----------|----------|------|
+| `SerializerSPI` | ProtoStuffSerializer | 序列化 |
+| `LoadBalanceSPI` | RoundRobin, Random | 负载均衡 |
+| `RegistrySPI` | ZooKeeperRegistry | 注册中心 |
+
+添加自定义实现：
+1. 实现对应接口
+2. 在 `META-INF/services/` 下注册
+3. 配置中指定使用
+
+---
+
+## Admin Dashboard 功能
+
+### Dashboard 首页
+- 📊 服务调用量实时统计（QPS）
+- 📈 接口响应时间图表（avg, P50, P90, P99）
+- ✅ 成功率/失败率展示
+- 🔴 熔断器状态面板
+
+### 服务详情
+- 📋 服务实例列表
+- 📉 调用指标详细数据
+- ⚡ 熔断器状态和配置
+- 🔧 在线参数调整
+
+### API 端点
 
 ```
-snack/
-├── snack-rpc             # 核心 RPC 框架
-│   └── src/main/java/com/snack/rpc/
-│       ├── RpcServer.java         # 服务端（Netty Server）
-│       ├── RpcClient.java        # 客户端（获取代理）
-│       ├── RpcApplication.java    # Spring Boot 入口
-│       ├── codec/                # 编解码器（ProtoStuff + 心跳）
-│       ├── client/               # 客户端组件
-│       │   ├── RpcInvoker.java       # 调用器（含重试/熔断/限流）
-│       │   ├── RpcFuture.java        # 异步 Future
-│       │   ├── CircuitBreaker.java    # 熔断器
-│       │   ├── RateLimiter.java      # 令牌桶限流
-│       │   └── RetryPolicy.java     # 重试策略
-│       ├── server/               # 服务端组件
-│       │   └── ServerHandler.java     # 请求处理 + 心跳
-│       └── registry/             # Zookeeper 服务注册与发现
-│
-├── snack-contract-demo    # 接口定义示例
-├── snack-service-demo     # 服务端示例
-├── snack-web-demo         # Spring MVC + RPC 调用示例
-└── snack-admin           # 管理后台（查看服务列表）
+GET  /api/metrics/all              # 所有服务聚合指标
+GET  /api/metrics/service/{name}   # 特定服务详细指标
+GET  /api/traces/recent?limit=100   # 最近调用链路
+GET  /api/health                   # 系统健康检查
 ```
 
 ---
@@ -285,166 +302,52 @@ snack/
 
 | 组件 | 版本 |
 |------|------|
-| Java | 1.8+ |
+| Java | 11+ (兼容 8) |
+| Spring Boot | 2.7.18 |
+| Spring Framework | 5.3.x |
 | Netty | 4.1.108.Final |
-| Curator | 2.11.1 |
-| ProtoStuff | 1.0.1 |
+| Curator | 2.7.1 |
+| ProtoStuff | 1.3.5 |
 | Lombok | 1.18.30 |
-| Spring Boot | 1.3.3.RELEASE |
 | Zookeeper | 3.4.6 |
 
 ---
 
-## SPI 扩展机制
+## 开发
 
-Snack RPC 框架支持通过 SPI (Service Provider Interface) 机制扩展核心组件：
-
-### 1. 序列化 SPI
-- **接口**: `SerializerSPI`
-- **默认实现**: `ProtoStuffSerializer` ("protostuff")
-- **配置**: `spi.serialization = "protostuff"`
-
-**添加自定义序列化器**:
-1. 实现 `SerializerSPI` 接口
-2. 在 `META-INF/services/com.snack.rpc.spi.SerializerSPI` 中注册
-3. 在配置中指定: `spi.serialization = "your-serializer"`
-
-### 2. 负载均衡 SPI
-- **接口**: `LoadBalanceSPI`
-- **内置实现**: `RoundRobinLoadBalance` ("roundrobin"), `RandomLoadBalance` ("random")
-- **配置**: `spi.loadbalance = "roundrobin"`
-
-**添加自定义负载均衡器**:
-1. 实现 `LoadBalanceSPI` 接口
-2. 在 `META-INF/services/com.snack.rpc.spi.LoadBalanceSPI` 中注册
-3. 在配置中指定: `spi.loadbalance = "your-balancer"`
-
-### 3. 注册中心 SPI
-- **接口**: `RegistrySPI`
-- **默认实现**: `ZooKeeperRegistrySPI` ("zookeeper")
-- **配置**: `spi.registry = "zookeeper"`
-
-**添加自定义注册中心**:
-1. 实现 `RegistrySPI` 接口
-2. 在 `META-INF/services/com.snack.rpc.spi.RegistrySPI` 中注册
-3. 在配置中指定: `spi.registry = "your-registry"`
-
-### 配置示例
-```hocon
-spi {
-  serialization = "protostuff"
-  loadbalance = "roundrobin"
-  registry = "zookeeper"
-  
-  # 序列化器特定配置
-  serialization.protostuff {
-    bufferSize = 4096
-  }
-  
-  # 负载均衡器特定配置
-  loadbalance.roundrobin {
-    # 轮询特定配置
-  }
-  
-  # 注册中心特定配置
-  registry.zookeeper {
-    connectString = "localhost:2181"
-    basePath = "/snack/serviceDiscovery"
-  }
-}
-```
-
----
-
-## 开发进度
-
-- [x] **第一阶段：稳定性**
-  - [x] 超时处理（NPE 修复）
-  - [x] 线程池防 OOM（有界队列 + CallerRunsPolicy）
-  - [x] 参数类型匹配修复
-  - [x] ZooRegistry 配置解耦
-  - [x] 心跳机制
-
-- [x] **第二阶段：可用性**
-  - [x] 异步调用（RpcFuture + Callback）
-  - [x] 熔断器（CircuitBreaker）
-  - [x] 限流器（RateLimiter）
-  - [x] 可配置重试策略
-
-- [x] **第三阶段：可观测性**
-  - [x] 链路追踪（TraceId 透传） - 支持分布式 TraceId 透传、采样率配置
-  - [x] 监控指标（Metrics） - QPS、成功率、延迟百分位（P50/P90/P99）等指标收集
-  - [x] 完善 Admin 后台 - 新增 `/trace/*` API 端点，支持查看 traces、metrics 数据
-
-- [x] **第四阶段：扩展性**
-  - [x] 序列化 SPI 扩展 - 支持 SPI 加载不同的序列化实现（ProtoStuff 为默认）
-  - [x] 负载均衡 SPI 扩展 - 支持 SPI 加载 RoundRobin、Random 等负载均衡算法
-  - [x] 注册中心 SPI 扩展 - 支持 SPI 加载不同注册中心（ZooKeeper 为默认）
-
----
-
-## 🚀 快速演示
-
-想要快速体验 Snack RPC 的功能？试试我们的一键演示！
-
-### 选项1：本地演示（需要 Docker、Java 8+、Maven）
-```bash
-# 克隆仓库
-git clone https://github.com/zyy/snack.git
-cd snack
-
-# 运行演示
-chmod +x demo/run-demo.sh
-./demo/run-demo.sh
-```
-
-演示将：
-1. 启动 ZooKeeper 容器（通过 Docker）
-2. 构建 Snack RPC 项目
-3. 启动服务提供者（端口 9999）
-4. 启动 Web 消费者（端口 8080）
-5. 执行测试 RPC 调用并显示结果
-6. 保持所有服务运行，直到按 Ctrl+C
-
-### 选项2：GitHub Actions 演示
-每次推送到仓库都会触发 GitHub Actions 中的自动化演示：
-- 服务在容器化环境中启动
-- 自动测试 RPC 调用
-- 验证追踪和指标 API
-- 在 GitHub 的 "Actions" 标签页查看实时演示
-
-### 演示组件
-- **ZooKeeper 注册中心**: `localhost:2181` - 服务发现
-- **服务提供者**: `localhost:9999` - 暴露 `DemoService.hello()` 的 RPC 服务
-- **Web 消费者**: `localhost:8080` - 发起 RPC 调用的 Spring MVC 应用
-- **管理后台**: `localhost:9090` - 查看追踪和指标（如需手动启动）
-
-### 手动演示步骤
-如果想分别运行各个组件：
+### 本地构建
 
 ```bash
-# 启动 ZooKeeper
-docker-compose -f demo/docker-compose.yml up -d
-
-# 构建项目
+# 编译所有模块
 mvn clean compile
 
-# 启动服务（在一个终端）
+# 运行测试
+mvn test
+
+# 打包
+mvn clean package -DskipTests
+```
+
+### 手动启动各服务
+
+```bash
+# 1. 启动 ZooKeeper
+docker run -d --name zookeeper -p 2181:2181 zookeeper:3.8
+
+# 2. 构建项目
+mvn clean install -DskipTests
+
+# 3. 启动服务提供者
 cd snack-service-demo
-mvn spring-boot:run -Dspring-boot.run.jvmArguments="-Dserver.port=9999"
+mvn spring-boot:run
 
-# 启动 Web 消费者（在另一个终端）
+# 4. 启动 Web 消费者（新终端）
 cd snack-web-demo
-mvn spring-boot:run -Dspring-boot.run.jvmArguments="-Dserver.port=8080"
+mvn spring-boot:run
 
-# 测试 RPC 调用
-curl http://localhost:8080/demo/hello
-# 应返回: "hello world"
-
-# 查看追踪（单独启动管理后台）
+# 5. 启动 Admin（新终端）
 cd snack-admin
-mvn spring-boot:run -Dspring-boot.run.jvmArguments="-Dserver.port=9090"
-curl http://localhost:9090/trace/list?limit=10
+mvn spring-boot:run
 ```
 
 ---
