@@ -168,25 +168,25 @@
                                 </div>
                                 <div class="grid grid-cols-3 gap-4 text-center">
                                     <div class="bg-slate-800/50 rounded-lg p-3">
-                                        <p class="text-2xl font-bold text-green-400">${cb.successfulRequests || 0}</p>
+                                        <p class="text-2xl font-bold text-green-400">${cb.successfulRequests !0}</p>
                                         <p class="text-xs text-slate-400">成功</p>
                                     </div>
                                     <div class="bg-slate-800/50 rounded-lg p-3">
-                                        <p class="text-2xl font-bold text-red-400">${cb.failedRequests || 0}</p>
+                                        <p class="text-2xl font-bold text-red-400">${cb.failedRequests !0}</p>
                                         <p class="text-xs text-slate-400">失败</p>
                                     </div>
                                     <div class="bg-slate-800/50 rounded-lg p-3">
-                                        <p class="text-2xl font-bold text-yellow-400">${cb.blockedRequests || 0}</p>
+                                        <p class="text-2xl font-bold text-yellow-400">${cb.blockedRequests !0}</p>
                                         <p class="text-xs text-slate-400">阻止</p>
                                     </div>
                                 </div>
                                 <#if cb.state == 'OPEN'>
                                 <div class="mt-4 bg-red-500/20 rounded-lg p-3 text-center">
-                                    <p class="text-red-400 text-sm">等待恢复: ${(cb.timeUntilRetry || 0) / 1000}秒</p>
+                                    <p class="text-red-400 text-sm">等待恢复: ${(cb.timeUntilRetry !0) / 1000}秒</p>
                                 </div>
                                 </#if>
                                 <div class="mt-4 text-xs text-slate-500">
-                                    <p>失败阈值: ${cb.failureThreshold || 5} | 恢复超时: ${(cb.recoveryTimeoutMs || 30000)}ms | 半开试探: ${cb.halfOpenRequests || 3}</p>
+                                    <p>失败阈值: ${cb.failureThreshold!5} | 恢复超时: ${(cb.recoveryTimeoutMs!30000)}ms | 半开试探: ${cb.halfOpenRequests!3}</p>
                                 </div>
                             </div>
                         `;

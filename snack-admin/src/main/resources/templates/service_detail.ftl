@@ -375,15 +375,15 @@
                     tableHtml += `
                         <tr>
                             <td><strong>${methodName}</strong></td>
-                            <td>${(m.qps || 0).toFixed(2)}</td>
+                            <td>${(m.qps!0).toFixed(2)}</td>
                             <td>${m.totalCalls.toLocaleString()}</td>
                             <td class="text-success">${m.successCalls.toLocaleString()}</td>
                             <td class="text-danger">${m.failureCalls.toLocaleString()}</td>
                             <td class="text-${rateClass}">${m.successRate.toFixed(1)}%</td>
-                            <td>${(m.avgLatency || 0).toFixed(1)}</td>
-                            <td>${(m.p50 || 0).toFixed(1)}</td>
-                            <td>${(m.p90 || 0).toFixed(1)}</td>
-                            <td>${(m.p99 || 0).toFixed(1)}</td>
+                            <td>${(m.avgLatency!0).toFixed(1)}</td>
+                            <td>${(m.p50!0).toFixed(1)}</td>
+                            <td>${(m.p90!0).toFixed(1)}</td>
+                            <td>${(m.p99!0).toFixed(1)}</td>
                             <td>
                                 <button class="btn btn-xs btn-info" onclick="viewMethodTraces('${methodName}')">链路</button>
                             </td>

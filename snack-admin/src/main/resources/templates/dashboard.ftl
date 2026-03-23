@@ -286,7 +286,7 @@
                             <div class="flex items-center justify-between">
                                 <div>
                                     <h4 class="font-semibold text-white">${s.name}</h4>
-                                    <p class="text-xs text-slate-400">${s.instances || 0} 实例</p>
+                                    <p class="text-xs text-slate-400">${s.instances!0} 实例</p>
                                 </div>
                                 <span class="w-3 h-3 rounded-full bg-green-400 pulse-dot"></span>
                             </div>
@@ -317,9 +317,9 @@
                                     <span class="px-2 py-1 rounded text-xs font-bold ${stateClass} bg-slate-900/50">${cb.state}</span>
                                 </div>
                                 <div class="grid grid-cols-3 gap-2 text-xs text-slate-400">
-                                    <div>失败: ${cb.failedRequests || 0}</div>
-                                    <div>成功: ${cb.successfulRequests || 0}</div>
-                                    <div>阻止: ${cb.blockedRequests || 0}</div>
+                                    <div>失败: ${cb.failedRequests!0}</div>
+                                    <div>成功: ${cb.successfulRequests!0}</div>
+                                    <div>阻止: ${cb.blockedRequests!0}</div>
                                 </div>
                             </div>
                         `;
@@ -353,9 +353,9 @@
                     tbody.innerHTML = data.data.map(t => `
                         <tr class="border-b border-slate-700/50 hover:bg-slate-800/50">
                             <td class="py-3 px-4 font-mono text-xs">${t.traceId ? t.traceId.substring(0, 8) + '...' : 'N/A'}</td>
-                            <td class="py-3 px-4">${t.serviceName || 'Unknown'}</td>
-                            <td class="py-3 px-4">${t.method || 'Unknown'}</td>
-                            <td class="py-3 px-4">${(t.latency || 0).toFixed(2)} ms</td>
+                            <td class="py-3 px-4">${t.serviceName!"Unknown"}</td>
+                            <td class="py-3 px-4">${t.method!"Unknown"}</td>
+                            <td class="py-3 px-4">${(t.latency!0).toFixed(2)} ms</td>
                             <td class="py-3 px-4">
                                 <span class="px-2 py-1 rounded text-xs ${t.success ? 'bg-green-400/20 text-green-400' : 'bg-red-400/20 text-red-400'}">
                                     ${t.success ? '成功' : '失败'}

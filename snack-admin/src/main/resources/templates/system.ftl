@@ -261,7 +261,7 @@
                                 ${details}
                             </div>
                         </div>
-                        <span class="${statusClass} font-bold">${info.status || 'UNKNOWN'}</span>
+                        <span class="${statusClass} font-bold">${info.status!"UNKNOWN"}</span>
                     </div>
                 `;
             }).join('');

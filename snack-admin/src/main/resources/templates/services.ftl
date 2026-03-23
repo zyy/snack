@@ -113,7 +113,7 @@
                         <div class="space-y-2 text-sm">
                             <div class="flex justify-between">
                                 <span class="text-slate-400">实例数</span>
-                                <span class="text-white">${s.instances || 0}</span>
+                                <span class="text-white">${s.instances !0}</span>
                             </div>
                             <div class="flex justify-between">
                                 <span class="text-slate-400">总调用</span>
@@ -181,11 +181,11 @@
                                         <p class="text-xs text-slate-400">状态</p>
                                     </div>
                                     <div>
-                                        <p class="text-2xl font-bold text-red-400">${cb.failedRequests || 0}</p>
+                                        <p class="text-2xl font-bold text-red-400">${cb.failedRequests !0}</p>
                                         <p class="text-xs text-slate-400">失败数</p>
                                     </div>
                                     <div>
-                                        <p class="text-2xl font-bold text-green-400">${cb.successfulRequests || 0}</p>
+                                        <p class="text-2xl font-bold text-green-400">${cb.successfulRequests !0}</p>
                                         <p class="text-xs text-slate-400">成功数</p>
                                     </div>
                                 </div>
@@ -201,20 +201,20 @@
                 content.innerHTML = `
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                         <div class="bg-slate-800/50 rounded-xl p-4 text-center">
-                            <p class="text-3xl font-bold text-blue-400">${formatNumber(aggregated.totalCalls || 0)}</p>
+                            <p class="text-3xl font-bold text-blue-400">${formatNumber(aggregated.totalCalls !0)}</p>
                             <p class="text-sm text-slate-400">总调用</p>
                         </div>
                         <div class="bg-slate-800/50 rounded-xl p-4 text-center">
-                            <p class="text-3xl font-bold text-green-400">${formatNumber(aggregated.successCalls || 0)}</p>
+                            <p class="text-3xl font-bold text-green-400">${formatNumber(aggregated.successCalls !0)}</p>
                             <p class="text-sm text-slate-400">成功</p>
                         </div>
                         <div class="bg-slate-800/50 rounded-xl p-4 text-center">
-                            <p class="text-3xl font-bold text-red-400">${formatNumber(aggregated.failureCalls || 0)}</p>
+                            <p class="text-3xl font-bold text-red-400">${formatNumber(aggregated.failureCalls !0)}</p>
                             <p class="text-sm text-slate-400">失败</p>
                         </div>
                         <div class="bg-slate-800/50 rounded-xl p-4 text-center">
-                            <p class="text-3xl font-bold ${(aggregated.successRate || 0) >= 0.99 ? 'text-green-400' : 'text-yellow-400'}">
-                                ${((aggregated.successRate || 0) * 100).toFixed(1)}%
+                            <p class="text-3xl font-bold ${(aggregated.successRate !0) >= 0.99 ? 'text-green-400' : 'text-yellow-400'}">
+                                ${((aggregated.successRate !0) * 100).toFixed(1)}%
                             </p>
                             <p class="text-sm text-slate-400">成功率</p>
                         </div>
@@ -222,19 +222,19 @@
 
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                         <div class="bg-slate-800/50 rounded-xl p-4 text-center">
-                            <p class="text-2xl font-bold text-blue-400">${(aggregated.avgLatency || 0).toFixed(2)}ms</p>
+                            <p class="text-2xl font-bold text-blue-400">${(aggregated.avgLatency !0).toFixed(2)}ms</p>
                             <p class="text-sm text-slate-400">平均延迟</p>
                         </div>
                         <div class="bg-slate-800/50 rounded-xl p-4 text-center">
-                            <p class="text-2xl font-bold text-green-400">${(aggregated.p50 || 0).toFixed(2)}ms</p>
+                            <p class="text-2xl font-bold text-green-400">${(aggregated.p50 !0).toFixed(2)}ms</p>
                             <p class="text-sm text-slate-400">P50</p>
                         </div>
                         <div class="bg-slate-800/50 rounded-xl p-4 text-center">
-                            <p class="text-2xl font-bold text-yellow-400">${(aggregated.p90 || 0).toFixed(2)}ms</p>
+                            <p class="text-2xl font-bold text-yellow-400">${(aggregated.p90 !0).toFixed(2)}ms</p>
                             <p class="text-sm text-slate-400">P90</p>
                         </div>
                         <div class="bg-slate-800/50 rounded-xl p-4 text-center">
-                            <p class="text-2xl font-bold text-red-400">${(aggregated.p99 || 0).toFixed(2)}ms</p>
+                            <p class="text-2xl font-bold text-red-400">${(aggregated.p99 !0).toFixed(2)}ms</p>
                             <p class="text-sm text-slate-400">P99</p>
                         </div>
                     </div>
