@@ -38,7 +38,7 @@ public class TraceCollector {
     
     // QPS calculation
     private final ConcurrentLinkedDeque<Long> timestamps = new ConcurrentLinkedDeque<>();
-    private final ConcurrentHashMap<String, ConcurrentLinkedDeque<Long>> serviceTimestamps = new ConcurrentLinkedDeque<>();
+    private final ConcurrentHashMap<String, ConcurrentLinkedDeque<Long>> serviceTimestamps = new ConcurrentHashMap<>();
     
     public TraceCollector(boolean enabled, int sampleRate) {
         this(enabled, sampleRate, 10000, 1000);
