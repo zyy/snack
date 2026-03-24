@@ -17,9 +17,30 @@ public class ServiceController {
     @Autowired
     private ApplicationService applicationService;
 
-    @RequestMapping("/")
-    public String home() {
+    // Page routes
+    @RequestMapping({"/", "/index"})
+    public String index() {
         return "redirect:/dashboard";
+    }
+    
+    @RequestMapping("/dashboard")
+    public String dashboard() {
+        return "dashboard";
+    }
+    
+    @RequestMapping("/services")
+    public String services() {
+        return "services";
+    }
+    
+    @RequestMapping("/circuit-breakers")
+    public String circuitBreakers() {
+        return "circuit_breakers";
+    }
+    
+    @RequestMapping("/system")
+    public String system() {
+        return "system";
     }
     
     @RequestMapping("/service/detail")
