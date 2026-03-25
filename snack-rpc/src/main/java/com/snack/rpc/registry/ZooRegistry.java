@@ -232,6 +232,11 @@ public class ZooRegistry {
     }
     
     private String findInnerHostIp() {
+        // 强制使用 127.0.0.1 以解决 RPC 连接问题
+        logger.info("Forcing IP address to 127.0.0.1 for RPC registration");
+        return "127.0.0.1";
+        
+        /* 原代码已注释掉
         try {
             Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
             while (interfaces.hasMoreElements()) {
@@ -263,6 +268,7 @@ public class ZooRegistry {
             logger.error("Failed to get network interfaces", e);
             return "127.0.0.1";
         }
+        */
     }
     
     /**

@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snack RPC Admin</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #0f172a; color: #e2e8f0; font-family: -apple-system, sans-serif; }
+        
+        .sidebar { position: fixed; left: 0; top: 0; bottom: 0; width: 220px; background: #0f172a; border-right: 1px solid #334155; }
+        .logo { padding: 20px; border-bottom: 1px solid #334155; display: flex; align-items: center; gap: 12px; }
+        .logo-icon { width: 40px; height: 40px; background: linear-gradient(135deg, #8b5cf6, #a855f7); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+        .logo h1 { font-size: 18px; color: #fff; }
+        .logo p { font-size: 12px; color: #94a3b8; }
+        
+        .nav { padding: 16px 0; }
+        .nav-item { padding: 12px 24px; cursor: pointer; display: flex; align-items: center; gap: 12px; color: #94a3b8; border-left: 3px solid transparent; transition: 0.2s; }
+        .nav-item:hover, .nav-item.active { background: rgba(59, 130, 246, 0.1); border-left-color: #3b82f6; color: #fff; }
+        
+        .status-bar { position: fixed; bottom: 0; left: 0; width: 220px; padding: 16px; background: #0f172a; border-top: 1px solid #334155; }
+        
+        .main { margin-left: 220px; padding: 20px; }
+        .page { display: none; }
+        .page.active { display: block; }
+        
+        h1 { font-size: 24px; color: #fff; margin-bottom: 8px; }
+        .subtitle { color: #94a3b8; font-size: 14px; margin-bottom: 24px; }
+        
+        .card { background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(148, 163, 184, 0.1); border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+        
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+        .stat-card { background: rgba(30, 41, 59, 0.7); border-radius: 12px; padding: 20px; }
+        .stat-label { color: #94a3b8; font-size: 14px; }
+        .stat-value { font-size: 30px; font-weight: bold; margin-top: 8px; }
+        
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; padding: 12px; color: #94a3b8; font-size: 14px; border-bottom: 1px solid #334155; }
+        td { padding: 12px; border-bottom: 1px solid rgba(51, 65, 85, 0.5); }
+        
+        .badge { padding: 2px 8px; border-radius: 12px; font-size: 12px; }
+        .badge-success { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
+        .badge-warning { background: rgba(234, 179, 8, 0.2); color: #facc15; }
+        .badge-error { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+        
+        button { background: #2563eb; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; }
+        
+        .demo-notice { background: rgba(234, 179, 8, 0.1); border: 1px solid rgba(234, 179, 8, 0.3); border-radius: 8px; padding: 12px; margin-bottom: 20px; color: #facc15; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <aside class="sidebar">
+        <div class="logo">
+            <div class="logo-icon">⚡</div>
+            <div>
+                <h1>Snack RPC</h1>
+                <p>企业级监控平台</p>
+            </div>
+        </div>
+        
+        <nav class="nav">
+            <div class="nav-item active" data-page="dashboard" onclick="showPage('dashboard')">
+                <span>📊</span> 仪表盘
+            </div>
+            <div class="nav-item" data-page="services" onclick="showPage('services')">
+                <span>🖥️</span> 服务列表
+            </div>
+            <div class="nav-item" data-page="circuit" onclick="showPage('circuit')">
+                <span>🛡️</span> 熔断器
+            </div>
+            <div class="nav-item" data-page="traces" onclick="showPage('traces')">
+                <span>🔗</span> 调用链
+            </div>
+            <div class="nav-item" data-page="system" onclick="showPage('system')">
+                <span>💻</span> 系统
+            </div>
+        </nav>
+        
+        <div class="status-bar">
+            <div style="display: flex; justify-content: space-between; font-size: 14px;">
+                <span style="color: #94a3b8;">系统状态</span>
+                <span class="badge badge-success">UP</span>
+            </div>
+        </div>
+    </aside>
+
+    <main class="main">
+        <div class="demo-notice">
+            正在加载真实数据...
+        </div>
+        
+        <!-- Dashboard -->
+        <div id="page-dashboard" class="page active">
+            <h1>实时监控</h1>
+            <p class="subtitle">实时监控 RPC 服务调用状态</p>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">全局 QPS</div>
+                    <div class="stat-value" style="color: #60a5fa;" id="qps">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">成功率</div>
+                    <div class="stat-value" style="color: #4ade80;" id="success-rate">0%</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">总调用量</div>
+                    <div class="stat-value" style="color: #c084fc;" id="total-calls">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">熔断状态</div>
+                    <div class="stat-value" style="color: #4ade80;" id="circuit-status">CLOSED</div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h3 style="color: #fff; margin-bottom: 16px;">服务列表</h3>
+                <table>
+                    <thead><tr><th>服务名称</th><th>调用次数</th><th>成功率</th></tr></thead>
+                    <tbody id="services-table"></tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Services -->
+        <div id="page-services" class="page">
+            <h1>服务列表</h1>
+            <p class="subtitle">所有注册的 RPC 服务</p>
+            <div id="services-list"></div>
+        </div>
+        
+        <!-- Circuit -->
+        <div id="page-circuit" class="page">
+            <h1>熔断器管理</h1>
+            <p class="subtitle">监控和管理服务熔断状态</p>
+            <div class="stats-grid">
+                <div class="stat-card"><div class="stat-label">总数</div><div class="stat-value" id="cb-total">0</div></div>
+                <div class="stat-card"><div class="stat-label">OPEN</div><div class="stat-value" style="color: #f87171;" id="cb-open">0</div></div>
+                <div class="stat-card"><div class="stat-label">HALF_OPEN</div><div class="stat-value" style="color: #facc15;" id="cb-half">0</div></div>
+                <div class="stat-card"><div class="stat-label">CLOSED</div><div class="stat-value" style="color: #4ade80;" id="cb-closed">0</div></div>
+            </div>
+            <div class="card">
+                <table>
+                    <thead><tr><th>服务名</th><th>状态</th><th>成功</th><th>失败</th><th>操作</th></tr></thead>
+                    <tbody id="circuit-table"></tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Traces -->
+        <div id="page-traces" class="page">
+            <h1>调用链追踪</h1>
+            <p class="subtitle">查看最近的 RPC 调用记录</p>
+            <div class="card">
+                <table>
+                    <thead><tr><th>Trace ID</th><th>服务</th><th>方法</th><th>延迟</th><th>状态</th><th>时间</th></tr></thead>
+                    <tbody id="traces-table"></tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- System -->
+        <div id="page-system" class="page">
+            <h1>系统状态</h1>
+            <p class="subtitle">JVM 和系统资源监控</p>
+            <div class="stats-grid">
+                <div class="stat-card"><div class="stat-label">状态</div><div class="stat-value" style="color: #4ade80;">运行中</div></div>
+                <div class="stat-card"><div class="stat-label">内存使用</div><div class="stat-value" style="color: #60a5fa;" id="mem-percent">0%</div></div>
+                <div class="stat-card"><div class="stat-label">CPU 核心</div><div class="stat-value" style="color: #c084fc;" id="cpu-cores">0</div></div>
+                <div class="stat-card"><div class="stat-label">内存总量</div><div class="stat-value" id="mem-total">0</div></div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div class="card">
+                    <h3 style="color: #fff; margin-bottom: 16px;">内存详情</h3>
+                    <div id="mem-details"></div>
+                </div>
+                <div class="card">
+                    <h3 style="color: #fff; margin-bottom: 16px;">组件状态</h3>
+                    <div style="display: flex; justify-content: space-between; padding: 12px; background: rgba(30,41,59,0.5); border-radius: 8px; margin-bottom: 8px;">
+                        <span style="color: #94a3b8;">Trace Collector</span><span class="badge badge-success">UP</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; padding: 12px; background: rgba(30,41,59,0.5); border-radius: 8px;">
+                        <span style="color: #94a3b8;">Circuit Breaker</span><span class="badge badge-success">UP</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+    // Page navigation
+    function showPage(page) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        document.getElementById('page-' + page).classList.add('active');
+        document.querySelector('[data-page="' + page + '"]').classList.add('active');
+    }
+    
+    function formatNum(n) {
+        if (!n) return '0';
+        if (n >= 1e9) return (n/1e9).toFixed(1) + 'B';
+        if (n >= 1e6) return (n/1e6).toFixed(1) + 'M';
+        if (n >= 1e3) return (n/1e3).toFixed(1) + 'K';
+        return n.toString();
+    }
+    
+    function formatBytes(b) {
+        if (!b) return '0 B';
+        const s = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(b) / Math.log(1024));
+        return (b / Math.pow(1024, i)).toFixed(2) + ' ' + s[i];
+    }
+    
+    function formatTime(t) {
+        return t ? new Date(t).toLocaleTimeString('zh-CN') : '-';
+    }
+    
+    // API endpoints
+    const API_BASE = '/api';
+    
+    async function fetchJSON(url) {
+        try {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error || 'API error');
+            return data;
+        } catch (error) {
+            console.error('Fetch error:', error);
+            return null;
+        }
+    }
+    
+    // Render functions using real API data
+    async function renderDashboard() {
+        const data = await fetchJSON(`${API_BASE}/dashboard/summary`);
+        const servicesData = await fetchJSON(`${API_BASE}/services`);
+        
+        if (data) {
+            const { globalQps, totalCalls, successRate, circuitBreakerStates } = data.data;
+            document.getElementById('qps').textContent = globalQps ? globalQps.toFixed(1) : '0';
+            document.getElementById('success-rate').textContent = successRate ? (successRate * 100).toFixed(1) + '%' : '0%';
+            document.getElementById('total-calls').textContent = formatNum(totalCalls || 0);
+            
+            const openCount = circuitBreakerStates ? circuitBreakerStates.OPEN || 0 : 0;
+            const cbStatus = document.getElementById('circuit-status');
+            cbStatus.textContent = openCount > 0 ? openCount : 'CLOSED';
+            cbStatus.style.color = openCount > 0 ? '#f87171' : '#4ade80';
+        }
+        
+        if (servicesData && servicesData.data && servicesData.data.length > 0) {
+            let html = '';
+            servicesData.data.slice(0, 5).forEach(s => {
+                const rate = (s.successRate || 0) * 100;
+                const badgeClass = rate >= 95 ? 'badge-success' : 'badge-warning';
+                html += '<tr><td style="color: #fff;">' + s.name + '</td><td>' + formatNum(s.totalCalls || 0) + '</td><td><span class="badge ' + badgeClass + '">' + rate.toFixed(1) + '%</span></td></tr>';
+            });
+            document.getElementById('services-table').innerHTML = html;
+        } else {
+            document.getElementById('services-table').innerHTML = '<tr><td colspan="3" style="text-align: center; color: #94a3b8; padding: 32px;">暂无服务数据</td></tr>';
+        }
+    }
+    
+    async function renderServices() {
+        const data = await fetchJSON(`${API_BASE}/services`);
+        if (data && data.data && data.data.length > 0) {
+            let html = '<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">';
+            data.data.forEach(s => {
+                const rate = (s.successRate || 0) * 100;
+                html += '<div class="card"><div style="display: flex; justify-content: space-between; margin-bottom: 12px;"><h3 style="color: #fff;">' + s.name + '</h3><span style="width: 12px; height: 12px; background: #4ade80; border-radius: 50%;"></span></div><div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 14px;"><div><span style="color: #94a3b8;">调用次数</span><div style="color: #fff;">' + formatNum(s.totalCalls || 0) + '</div></div><div><span style="color: #94a3b8;">成功率</span><div style="color: ' + (rate >= 95 ? '#4ade80' : '#facc15') + '">' + rate.toFixed(1) + '%</div></div></div></div>';
+            });
+            html += '</div>';
+            document.getElementById('services-list').innerHTML = html;
+        } else {
+            document.getElementById('services-list').innerHTML = '<div class="text-center text-slate-500 py-8">暂无注册服务</div>';
+        }
+    }
+    
+    async function renderCircuits() {
+        const data = await fetchJSON(`${API_BASE}/circuit-breakers`);
+        if (data && data.data && data.data.length > 0) {
+            document.getElementById('cb-total').textContent = data.data.length;
+            document.getElementById('cb-open').textContent = data.data.filter(c => c.state === 'OPEN').length;
+            document.getElementById('cb-half').textContent = data.data.filter(c => c.state === 'HALF_OPEN').length;
+            document.getElementById('cb-closed').textContent = data.data.filter(c => c.state === 'CLOSED').length;
+            
+            let html = '';
+            data.data.forEach(cb => {
+                const badgeClass = cb.state === 'OPEN' ? 'badge-error' : cb.state === 'HALF_OPEN' ? 'badge-warning' : 'badge-success';
+                html += '<tr><td style="color: #fff;">' + cb.name + '</td><td><span class="badge ' + badgeClass + '">' + cb.state + '</span></td><td style="color: #4ade80;">' + (cb.successfulRequests || 0) + '</td><td style="color: #f87171;">' + (cb.failedRequests || 0) + '</td><td><button onclick="resetCircuitBreaker(\'' + cb.name + '\')">重置</button></td></tr>';
+            });
+            document.getElementById('circuit-table').innerHTML = html;
+        } else {
+            document.getElementById('cb-total').textContent = '0';
+            document.getElementById('cb-open').textContent = '0';
+            document.getElementById('cb-half').textContent = '0';
+            document.getElementById('cb-closed').textContent = '0';
+            document.getElementById('circuit-table').innerHTML = '<tr><td colspan="5" style="text-align: center; color: #94a3b8; padding: 32px;">暂无熔断器数据</td></tr>';
+        }
+    }
+    
+    async function renderTraces() {
+        const data = await fetchJSON(`${API_BASE}/traces/recent?limit=10`);
+        if (data && data.data && data.data.length > 0) {
+            let html = '';
+            data.data.forEach(t => {
+                const badgeClass = t.success ? 'badge-success' : 'badge-error';
+                html += '<tr><td style="color: #94a3b8; font-family: monospace;">' + (t.traceId || 'N/A') + '</td><td style="color: #fff;">' + (t.serviceName || 'Unknown') + '</td><td style="color: #94a3b8;">' + (t.method || 'Unknown') + '</td><td style="color: #60a5fa;">' + (t.latency || 0) + 'ms</td><td><span class="badge ' + badgeClass + '">' + (t.success ? '成功' : '失败') + '</span></td><td style="color: #94a3b8;">' + formatTime(t.timestamp) + '</td></tr>';
+            });
+            document.getElementById('traces-table').innerHTML = html;
+        } else {
+            document.getElementById('traces-table').innerHTML = '<tr><td colspan="6" style="text-align: center; color: #94a3b8; padding: 32px;">暂无调用记录</td></tr>';
+        }
+    }
+    
+    async function renderSystem() {
+        const data = await fetchJSON(`${API_BASE}/health`);
+        if (data && data.data && data.data.components && data.data.components.system) {
+            const sys = data.data.components.system;
+            const memPercent = Math.round(sys.usedMemory / sys.maxMemory * 100);
+            document.getElementById('mem-percent').textContent = memPercent + '%';
+            document.getElementById('cpu-cores').textContent = sys.availableProcessors;
+            document.getElementById('mem-total').textContent = formatBytes(sys.maxMemory);
+            document.getElementById('mem-details').innerHTML = '<div style="display: flex; justify-content: space-between; padding: 8px 0;"><span style="color: #94a3b8;">已使用</span><span style="color: #fff;">' + formatBytes(sys.usedMemory) + '</span></div><div style="display: flex; justify-content: space-between; padding: 8px 0;"><span style="color: #94a3b8;">可用</span><span style="color: #fff;">' + formatBytes(sys.freeMemory) + '</span></div><div style="display: flex; justify-content: space-between; padding: 8px 0;"><span style="color: #94a3b8;">总量</span><span style="color: #fff;">' + formatBytes(sys.totalMemory) + '</span></div>';
+        } else {
+            // Fallback to browser system info
+            const mem = performance.memory;
+            if (mem) {
+                const memPercent = Math.round(mem.usedJSHeapSize / mem.totalJSHeapSize * 100);
+                document.getElementById('mem-percent').textContent = memPercent + '%';
+                document.getElementById('mem-total').textContent = formatBytes(mem.totalJSHeapSize);
+                document.getElementById('mem-details').innerHTML = '<div style="display: flex; justify-content: space-between; padding: 8px 0;"><span style="color: #94a3b8;">已使用</span><span style="color: #fff;">' + formatBytes(mem.usedJSHeapSize) + '</span></div><div style="display: flex; justify-content: space-between; padding: 8px 0;"><span style="color: #94a3b8;">可用</span><span style="color: #fff;">' + formatBytes(mem.totalJSHeapSize - mem.usedJSHeapSize) + '</span></div>';
+            }
+            document.getElementById('cpu-cores').textContent = navigator.hardwareConcurrency || '?';
+        }
+    }
+    
+    // Helper function to reset circuit breaker
+    async function resetCircuitBreaker(name) {
+        const response = await fetch(`${API_BASE}/circuit-breaker/${encodeURIComponent(name)}/reset`, { method: 'POST' });
+        const result = await response.json();
+        if (result.success) {
+            alert('熔断器重置成功: ' + name);
+            renderCircuits();
+        } else {
+            alert('重置失败: ' + (result.message || result.error));
+        }
+    }
+    
+    // Initialize with real data
+    document.addEventListener('DOMContentLoaded', async function() {
+        // Update demo notice
+        const notice = document.querySelector('.demo-notice');
+        if (notice) {
+            notice.textContent = '正在加载真实数据...';
+            notice.style.background = 'rgba(59, 130, 246, 0.1)';
+            notice.style.borderColor = 'rgba(59, 130, 246, 0.3)';
+            notice.style.color = '#60a5fa';
+        }
+        
+        await Promise.all([
+            renderDashboard(),
+            renderServices(),
+            renderCircuits(),
+            renderTraces(),
+            renderSystem()
+        ]);
+        
+        if (notice) {
+            notice.style.display = 'none';
+        }
+        
+        // Auto-refresh every 5 seconds
+        setInterval(renderDashboard, 5000);
+        setInterval(renderServices, 10000);
+        setInterval(renderCircuits, 8000);
+        setInterval(renderTraces, 15000);
+        setInterval(renderSystem, 30000);
+    });
+    </script>
+</body>
+</html>

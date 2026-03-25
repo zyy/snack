@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test</title>
+    <script src="/vue.js"></script>
+</head>
+<body>
+    <div id="app">
+        <h1>{{ message }}</h1>
+        <button @click="change">Change</button>
+        <div v-show="show">Hello World</div>
+    </div>
+    <script>
+        const { createApp, ref } = Vue;
+        createApp({
+            setup() {
+                const message = ref('Test Vue');
+                const show = ref(true);
+                const change = () => { message.value = 'Clicked!'; show.value = !show.value; };
+                return { message, show, change };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

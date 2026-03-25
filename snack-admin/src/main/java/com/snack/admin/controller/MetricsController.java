@@ -1,13 +1,17 @@
 package com.snack.admin.controller;
 
 import com.snack.admin.service.ApplicationService;
+import com.snack.admin.service.impl.ApplicationServiceImpl;
 import com.snack.rpc.trace.CircuitBreaker;
 import com.snack.rpc.trace.CircuitBreakerRegistry;
 import com.snack.rpc.trace.TraceCollector;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 
+import javax.annotation.PostConstruct;
 import java.util.*;
 
 /**
@@ -16,12 +20,26 @@ import java.util.*;
 @Controller
 @RequestMapping("/api")
 public class MetricsController {
+    private static final Logger logger = LoggerFactory.getLogger(MetricsController.class);
     
     private final TraceCollector tracer = TraceCollector.getInstance();
     private final CircuitBreakerRegistry circuitBreakerRegistry = CircuitBreakerRegistry.getInstance();
     
     @Autowired(required = false)
     private ApplicationService applicationService;
+    
+    public MetricsController() {
+        logger.info("MetricsController constructor called");
+    }
+    
+    @PostConstruct
+    public void init() {
+        logger.info("MetricsController @PostConstruct called, applicationService is {}",
+                applicationService != null ? "injected" : "NULL (not injected)");
+        if (applicationService != null) {
+            logger.info("ApplicationService implementation: {}", applicationService.getClass().getName());
+        }
+    }
     
     // ====================
     // Services APIs
@@ -34,11 +52,41 @@ public class MetricsController {
     @RequestMapping(value = "/services", method = RequestMethod.GET)
     @ResponseBody
     public Map<String, Object> getServices() {
+        logger.info("getServices() called, applicationService is {}", applicationService != null ? "available" : "NULL");
         Map<String, Object> result = new HashMap<>();
         try {
             List<Map<String, Object>> services = new ArrayList<>();
             
-            // Get services from TraceCollector
+            // First, try to get services from ZooKeeper via ApplicationService
+            ApplicationService serviceToUse = applicationService;
+            if (serviceToUse == null) {
+                logger.info("Creating ApplicationServiceImpl instance directly");
+                serviceToUse = new ApplicationServiceImpl();
+            }
+            
+            try {
+                Map<String, List> serviceInstancesMap = serviceToUse.getServiceList();
+                logger.info("Retrieved {} services from ZooKeeper", serviceInstancesMap.size());
+                
+                for (Map.Entry<String, List> entry : serviceInstancesMap.entrySet()) {
+                    String serviceName = entry.getKey();
+                    List instances = entry.getValue();
+                    
+                    Map<String, Object> service = new HashMap<>();
+                    service.put("name", serviceName);
+                    service.put("type", "registered");
+                    service.put("instances", instances != null ? instances.size() : 0);
+                    service.put("instanceList", instances);
+                    service.put("totalCalls", 0);
+                    service.put("successRate", 0.0);
+                    
+                    services.add(service);
+                }
+            } catch (Exception e) {
+                logger.error("Failed to get services from ZooKeeper", e);
+            }
+            
+            // Also get services from TraceCollector (for metrics)
             Map<String, Map<String, Object>> metrics = tracer.getAllMetricsSummary();
             for (String serviceName : metrics.keySet()) {
                 Map<String, Object> service = new HashMap<>();

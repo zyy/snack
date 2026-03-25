@@ -57,10 +57,22 @@ public class ServerHandler extends ChannelDuplexHandler {
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
         if (msg instanceof IdleStateEvent) {
             handleIdleStateEvent(ctx, (IdleStateEvent) msg);
+        } else if (msg instanceof HeartbeatMessage) {
+            handleHeartbeat(ctx, (HeartbeatMessage) msg);
         } else if (msg instanceof RequestMessage) {
             handleRequest(ctx, (RequestMessage) msg);
         } else {
             ctx.fireChannelRead(msg);
+        }
+    }
+    
+    private void handleHeartbeat(ChannelHandlerContext ctx, HeartbeatMessage msg) {
+        if (msg.isPing()) {
+            HeartbeatMessage pong = HeartbeatMessage.pong(SERVER_ID);
+            ctx.writeAndFlush(pong);
+            logger.debug("Heartbeat ping from client, replied with pong");
+        } else if (msg.isPong()) {
+            logger.trace("Heartbeat pong received from client");
         }
     }
 

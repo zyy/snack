@@ -4,17 +4,13 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 
 /**
- * Single Page Application Controller - serves index.html for all routes.
+ * Single Page Application Controller - for SPA routing
  */
 @Controller
 public class ServiceController {
     
-    @GetMapping(value = {"/", "/index"})
-    public String root() {
-        return "forward:/index.html";
-    }
-    
-    @GetMapping(value = {"/dashboard", "/services", "/circuit", "/system"})
+    // 所有路由都转发到 index.html，由 Vue Router 处理前端路由
+    @GetMapping(value = {"/", "/index", "/dashboard", "/services", "/circuit", "/system"})
     public String spa() {
         return "forward:/index.html";
     }

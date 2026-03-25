@@ -16,7 +16,7 @@ public class ProtoStuffSerializer implements SerializerSPI {
 
     public static final ProtoStuffSerializer serializer = new ProtoStuffSerializer();
 
-    private ProtoStuffSerializer() {
+    public ProtoStuffSerializer() {
     }
 
     /**

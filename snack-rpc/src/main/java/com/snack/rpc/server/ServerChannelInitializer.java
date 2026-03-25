@@ -44,17 +44,11 @@ public class ServerChannelInitializer extends ChannelInitializer<SocketChannel> 
     protected void initChannel(SocketChannel ch) throws Exception {
         ChannelPipeline p = ch.pipeline();
         
-        // 1. Detect idle and fire IdleStateEvent
-        p.addLast("idleStateHandler", new IdleStateHandler(READER_IDLE, WRITER_IDLE, 0));
-        
-        // 2. Heartbeat routing (must be before decoder)
-        p.addLast("heartbeatRouter", new HeartbeatRouter());
-        
-        // 3. RPC codec
+        // 1. RPC codec only (no heartbeat complexity)
         p.addLast("serverEncoder", new ServerEncoder());
         p.addLast("serverDecoder", new ServerDecoder());
         
-        // 4. Business logic - handles both RPC and heartbeat
+        // 2. Business logic
         p.addLast("serverHandler", new ServerHandler(rpcServer));
     }
 }
